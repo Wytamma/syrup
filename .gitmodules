@@ -1,0 +1,4 @@
+[submodule "vendor/cmaple"]
+	path = vendor/cmaple
+	url = https://github.com/Wytamma/cmaple
+	branch = syrup/browser-patches
