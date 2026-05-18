@@ -516,7 +516,7 @@
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">CMAPLE v2 WASM</p>
+            <p class="eyebrow">SYRUP (CMAPLE in the browser)</p>
             <h1 id="modal-title">
               {state === 'preflight' ? 'Analyzing alignment' : state === 'running' ? 'Running analysis' : 'Alignment ready'}
             </h1>
