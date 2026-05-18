@@ -686,7 +686,7 @@ input[type="range"] {
 .tree-reset-button:hover:not(:disabled),
 .icon-button:hover:not(:disabled) {
   border-color: var(--button-hover);
-  background: color-mix(in srgb, var(--button-hover) 18%, var(--surface-muted));
+  background: color-mix(in srgb, var(--button-hover) 24%, var(--surface-muted));
   color: var(--button-hover);
 }
 
@@ -765,7 +765,8 @@ input[type="range"] {
   }
 
   .tree-toolbar {
-    align-items: center;
+    align-items: stretch;
+    flex-direction: column;
     width: calc(100% - 74px);
     max-width: calc(100% - 74px);
     padding: 10px 12px;
@@ -776,14 +777,23 @@ input[type="range"] {
     bottom: 10px;
     width: calc(100vw - 20px);
     gap: 10px;
+    align-items: stretch;
   }
 
   .tree-toolbar > div:first-child {
-    max-width: calc(100% - 108px);
+    max-width: 100%;
   }
 
   .tree-actions {
     display: flex;
     flex-wrap: nowrap;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .tree-reset-button {
+    align-self: stretch;
+    min-height: 0;
+    height: auto;
   }
 }
