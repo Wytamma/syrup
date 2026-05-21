@@ -146,7 +146,7 @@ function getLikelyLongRunWarning(data: Uint8Array, stats: AlignmentStats) {
       return [
         largeAlignmentWarning || 'This alignment may take several minutes in the browser, especially with SH-aLRT support enabled.',
         details.length ? `It has ${details.join(' and ')}.` : '',
-        'Consider turning off SH-aLRT support or lowering the number of replicates for a faster first run.',
+        'Consider turning off SH-aLRT support or lowering the number of replicates for a faster less robust analysis.',
       ].filter(Boolean).join(' ')
     }
   } catch {
