@@ -313,12 +313,6 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
     if (!stored) throw new Error('No alignment is loaded. Drop the file again.')
     if (!stored.wasmHandle) throw new Error('The parsed alignment is unavailable. Drop the file again.')
 
-    post({
-      type: 'log',
-      id: message.id,
-      message: 'Using Pixi/Emscripten CMAPLE WASM runtime.',
-      stream: 'stdout',
-    })
     bench(
       message.id,
       [

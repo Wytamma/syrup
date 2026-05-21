@@ -277,10 +277,6 @@
     logLikelihood = null
     state = 'preflight'
 
-    if (file.size > 75 * 1024 * 1024) {
-      logs = [`Large alignment: ${formatFileSize(file.size)}. WebAssembly memory may grow during parsing and inference.`]
-    }
-
     try {
       const data = new Uint8Array(await file.arrayBuffer())
       getWorker().postMessage(
