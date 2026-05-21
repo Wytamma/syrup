@@ -511,13 +511,33 @@ h1 {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
+  padding-bottom: 4px;
 }
 
 .options label {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
   align-items: center;
   gap: 12px;
   min-width: 0;
+}
+
+.options .thread-option strong {
+  justify-self: start;
+}
+
+.options .option-group {
+  display: grid;
+  gap: 6px;
+}
+
+.options .checkbox-option,
+.options .number-option {
+  justify-content: stretch;
+}
+
+.options .checkbox-number-group .checkbox-option {
+  width: 100%;
 }
 
 .options label span {
@@ -534,8 +554,27 @@ input[type="range"] {
   width: 100%;
 }
 
+.options input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  justify-self: end;
+}
+
+.options input[type="number"] {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
 .options label strong {
-  flex: 0 0 auto;
   min-width: 2ch;
   text-align: right;
 }

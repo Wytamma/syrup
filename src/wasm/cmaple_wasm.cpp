@@ -270,6 +270,12 @@ void normalizeNumThreads(int& num_threads) {
 #endif
 }
 
+void normalizeBranchSupportReplicates(int& branch_support_replicates) {
+  if (branch_support_replicates < 1) {
+    branch_support_replicates = 0;
+  }
+}
+
 namespace cmaple {
 
 std::string getVersion() {
@@ -345,13 +351,16 @@ extern "C" [[noreturn]] void __cxa_throw(void*, void*, void*) {
 extern "C" char* cmaple_infer(const unsigned char* data,
                                unsigned int size,
                                int format,
-                               int num_threads) {
+                               int num_threads,
+                               int compute_branch_support,
+                               int branch_support_replicates) {
   try {
     if (data == nullptr || size == 0) {
       return copyResult(errorJson("Alignment file is empty."));
     }
 
     normalizeNumThreads(num_threads);
+    normalizeBranchSupportReplicates(branch_support_replicates);
 
     cmaple::verbose_mode = cmaple::VB_MED;
 
@@ -361,7 +370,9 @@ extern "C" char* cmaple_infer(const unsigned char* data,
     cmaple::Tree tree(alignment.get(), &model);
 
     tree.infer(num_threads, cmaple::Tree::NORMAL_TREE_SEARCH, false, false);
-    tree.computeBranchSupport(num_threads);
+    if (compute_branch_support && branch_support_replicates > 0) {
+      tree.computeBranchSupport(num_threads, branch_support_replicates);
+    }
 
     const double log_likelihood = tree.computeLh();
     const std::string newick =
@@ -402,7 +413,10 @@ extern "C" char* cmaple_analyze(const unsigned char* data,
   }
 }
 
-extern "C" char* cmaple_infer_loaded(unsigned int handle, int num_threads) {
+extern "C" char* cmaple_infer_loaded(unsigned int handle,
+                                      int num_threads,
+                                      int compute_branch_support,
+                                      int branch_support_replicates) {
   try {
     auto loaded = loaded_alignments.find(handle);
     if (loaded == loaded_alignments.end()) {
@@ -411,6 +425,7 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle, int num_threads) {
     }
 
     normalizeNumThreads(num_threads);
+    normalizeBranchSupportReplicates(branch_support_replicates);
     cmaple::verbose_mode = cmaple::VB_MED;
 
     cmaple::Alignment& alignment = *loaded->second.alignment;
@@ -418,7 +433,9 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle, int num_threads) {
     cmaple::Tree tree(&alignment, &model);
 
     tree.infer(num_threads, cmaple::Tree::NORMAL_TREE_SEARCH, false, false);
-    tree.computeBranchSupport(num_threads);
+    if (compute_branch_support && branch_support_replicates > 0) {
+      tree.computeBranchSupport(num_threads, branch_support_replicates);
+    }
 
     const double log_likelihood = tree.computeLh();
     const std::string newick =

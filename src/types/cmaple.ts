@@ -20,6 +20,8 @@ export type CmapleWorkerRequest =
       type: 'infer'
       id: string
       numThreads: number
+      computeBranchSupport: boolean
+      branchSupportReplicates: number
     }
   | {
       type: 'clear'

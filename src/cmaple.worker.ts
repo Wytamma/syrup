@@ -6,8 +6,20 @@ type EmscriptenModule = {
   _cmaple_free: (ptr: number) => void
   _cmaple_release: (handle: number) => void
   _cmaple_analyze: (ptr: number, size: number, format: number) => number
-  _cmaple_infer: (ptr: number, size: number, format: number, numThreads: number) => number
-  _cmaple_infer_loaded: (handle: number, numThreads: number) => number
+  _cmaple_infer: (
+    ptr: number,
+    size: number,
+    format: number,
+    numThreads: number,
+    computeBranchSupport: number,
+    branchSupportReplicates: number,
+  ) => number
+  _cmaple_infer_loaded: (
+    handle: number,
+    numThreads: number,
+    computeBranchSupport: number,
+    branchSupportReplicates: number,
+  ) => number
 }
 
 type StoredAlignment = {
@@ -70,6 +82,78 @@ function readCStringFromBytes(bytes: Uint8Array, ptr: number) {
   let end = ptr
   while (bytes[end] !== 0) end += 1
   return new TextDecoder().decode(Uint8Array.from(bytes.subarray(ptr, end)))
+}
+
+function getLikelyLongRunWarning(data: Uint8Array, stats: AlignmentStats) {
+  const largeAlignmentWarning =
+    stats.sequenceCount * stats.sequenceLength >= 50_000_000
+      ? 'This is a large alignment and may take several minutes in the browser, especially with SH-aLRT support enabled.'
+      : ''
+
+  if (stats.format !== 'fasta') return largeAlignmentWarning
+
+  try {
+    const text = new TextDecoder().decode(data)
+    const sequences: string[] = []
+    let current = ''
+
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim()
+      if (!line) continue
+      if (line.startsWith('>')) {
+        if (current) sequences.push(current.toUpperCase())
+        current = ''
+        continue
+      }
+      current += line
+    }
+
+    if (current) sequences.push(current.toUpperCase())
+    if (!sequences.length) return largeAlignmentWarning
+
+    const sequenceLength = sequences[0].length
+    let ambiguousSites = 0
+    let variableColumns = 0
+
+    for (const sequence of sequences) {
+      for (let index = 0; index < sequenceLength; index += 1) {
+        if (!'ACGT'.includes(sequence[index])) ambiguousSites += 1
+      }
+    }
+
+    for (let index = 0; index < sequenceLength; index += 1) {
+      let bases = 0
+      if (sequences.some((sequence) => sequence[index] === 'A')) bases += 1
+      if (sequences.some((sequence) => sequence[index] === 'C')) bases += 1
+      if (sequences.some((sequence) => sequence[index] === 'G')) bases += 1
+      if (sequences.some((sequence) => sequence[index] === 'T')) bases += 1
+      if (bases > 1) variableColumns += 1
+    }
+
+    const meanAmbiguousSites = ambiguousSites / sequences.length
+    const ambiguousFraction = ambiguousSites / (sequences.length * sequenceLength)
+    const variableColumnsPerKb = variableColumns / (sequenceLength / 1000)
+    const hasDenseVariation = variableColumns >= 2000 && variableColumnsPerKb >= 50
+    const hasSubstantialAmbiguity = meanAmbiguousSites >= 100 && ambiguousFraction >= 0.01
+    const hasDifficultVariation = hasDenseVariation && hasSubstantialAmbiguity
+
+    if (largeAlignmentWarning || hasDifficultVariation) {
+      const details = [
+        hasDifficultVariation ? `${variableColumns.toLocaleString()} variable columns` : '',
+        hasDifficultVariation ? `${Math.round(meanAmbiguousSites).toLocaleString()} ambiguous sites per sequence on average` : '',
+      ].filter(Boolean)
+
+      return [
+        largeAlignmentWarning || 'This alignment may take several minutes in the browser, especially with SH-aLRT support enabled.',
+        details.length ? `It has ${details.join(' and ')}.` : '',
+        'Consider turning off SH-aLRT support or lowering the number of replicates for a faster first run.',
+      ].filter(Boolean).join(' ')
+    }
+  } catch {
+    return largeAlignmentWarning
+  }
+
+  return largeAlignmentWarning
 }
 
 async function loadCmaple() {
@@ -197,6 +281,8 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         preflight.id = message.id
         preflight.stats.fileName = message.fileName
         preflight.stats.fileSize = message.data.byteLength
+        const longRunWarning = getLikelyLongRunWarning(message.data, preflight.stats)
+        if (longRunWarning) preflight.warnings = [...preflight.warnings, longRunWarning]
         stored.wasmHandle = preflight.handle
         stored.stats = preflight.stats
         stored.effective = preflight.effective
@@ -247,6 +333,8 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         `sequenceLength=${stored.stats?.sequenceLength ?? 'unknown'}`,
         `effective=${stored.effective ?? 'unknown'}`,
         `requestedThreads=${message.numThreads}`,
+        `branchSupport=${message.computeBranchSupport}`,
+        `branchSupportReplicates=${message.branchSupportReplicates}`,
         `cpus=${navigator.hardwareConcurrency || 'unknown'}`,
         `crossOriginIsolated=${crossOriginIsolated}`,
         `runtimeReadyMs=${ms(runtimeReadyMs)}`,
@@ -254,7 +342,12 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
       ].join(' '),
     )
     const inferStartedAt = performance.now()
-    const resultPtr = module._cmaple_infer_loaded(stored.wasmHandle, message.numThreads)
+    const resultPtr = module._cmaple_infer_loaded(
+      stored.wasmHandle,
+      message.numThreads,
+      message.computeBranchSupport ? 1 : 0,
+      message.branchSupportReplicates,
+    )
     if (!resultPtr) throw new Error('CMAPLE did not return a result.')
     const json = readCStringFromBytes(module.HEAPU8, resultPtr)
     module._cmaple_free(resultPtr)

@@ -38,6 +38,8 @@
   let didDownloadNewick = false
   let numThreads = Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1))
   const maxThreads = Math.max(1, navigator.hardwareConcurrency || 1)
+  let computeBranchSupport = true
+  let branchSupportReplicates = 1000
   let theme: ThemeMode = 'dark'
   let systemThemeMedia: MediaQueryList | null = null
 
@@ -299,6 +301,7 @@
 
   function runInference() {
     if (!currentId || state !== 'ready') return
+    branchSupportReplicates = Math.max(1, Math.floor(Number(branchSupportReplicates) || 1000))
     error = ''
     logs = []
     startTimer()
@@ -307,6 +310,8 @@
       type: 'infer',
       id: currentId,
       numThreads,
+      computeBranchSupport,
+      branchSupportReplicates,
     })
   }
 
@@ -576,33 +581,48 @@
           {/if}
 
           <div class="options">
-            <label>
-              <span>CMAPLE threads</span>
-              <input
-                type="range"
-                min="1"
-                max={maxThreads}
-                bind:value={numThreads}
-                disabled={state === 'running' || !crossOriginIsolated}
-              />
-              <strong>{numThreads}</strong>
-            </label>
-          </div>
-
-          <div class="log-panel" aria-live="polite">
-            <div class="log-title">Run log</div>
-            <div class="log-lines" bind:this={logLinesElement}>
-              {#if logs.length}
-                {#each logs as line}
-                  <div>{line}</div>
-                {/each}
-              {:else}
-                <div class="log-muted">
-                  {state === 'running' ? 'Waiting for CMAPLE output.' : 'Logs will appear here after Run.'}
-                </div>
-              {/if}
+            <div class="option-group">
+              <span>Threads</span>
+              <label class="thread-option">
+                <input
+                  type="range"
+                  min="1"
+                  max={maxThreads}
+                  bind:value={numThreads}
+                  disabled={state === 'running' || !crossOriginIsolated}
+                />
+                <strong>{numThreads}</strong>
+              </label>
+            </div>
+            <div class="option-group checkbox-number-group">
+              <span>SH-aLRT Replicates</span>
+              <label class="checkbox-option">
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  bind:value={branchSupportReplicates}
+                  disabled={state === 'running' || !computeBranchSupport}
+                />
+                <input type="checkbox" bind:checked={computeBranchSupport} disabled={state === 'running'} />
+              </label>
             </div>
           </div>
+
+          {#if state === 'running' || logs.length}
+            <div class="log-panel" aria-live="polite">
+              <div class="log-title">Run log</div>
+              <div class="log-lines" bind:this={logLinesElement}>
+                {#if logs.length}
+                  {#each logs as line}
+                    <div>{line}</div>
+                  {/each}
+                {:else}
+                  <div class="log-muted">Waiting for CMAPLE output.</div>
+                {/if}
+              </div>
+            </div>
+          {/if}
 
           <div class="modal-actions">
             {#if state !== 'running'}
