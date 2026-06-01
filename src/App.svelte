@@ -1,9 +1,10 @@
 <script lang="ts">
   import { afterUpdate, onDestroy, onMount } from 'svelte'
   import AppTopbar from './lib/components/AppTopbar.svelte'
+  import DivergenceQualityFilter from './lib/components/DivergenceQualityFilter.svelte'
   import SyrupLogo from './lib/components/SyrupLogo.svelte'
   import TreeViewer from './lib/components/TreeViewer.svelte'
-  import type { AlignmentStats, CmapleWorkerResponse } from './types/cmaple'
+  import type { AlignmentStats, CmapleWorkerResponse, DivergenceSummary } from './types/cmaple'
 
   type AppState = 'idle' | 'preflight' | 'ready' | 'running' | 'done' | 'error'
   type ThemeMode = 'dark' | 'light'
@@ -11,6 +12,9 @@
   const THEME_STORAGE_KEY = 'syrup-theme'
   const SYSTEM_THEME_QUERY = '(prefers-color-scheme: dark)'
   const ALIGNMENT_QUERY_PARAM = 'alignment'
+  const DEFAULT_MAX_DIVERGENCE_PERCENT = 6.7
+  const CMAPLE_MAX_SUBS_PER_SITE = 0.067
+  const CMAPLE_MEAN_SUBS_PER_SITE = 0.02
 
   let worker: Worker | null = null
   let state: AppState = 'idle'
@@ -20,6 +24,7 @@
   let isDragging = false
   let error = ''
   let stats: AlignmentStats | null = null
+  let divergence: DivergenceSummary | null = null
   let effective: boolean | null = null
   let warnings: string[] = []
   let logs: string[] = []
@@ -40,6 +45,8 @@
   const maxThreads = Math.max(1, navigator.hardwareConcurrency || 1)
   let computeBranchSupport = true
   let branchSupportReplicates = 1000
+  let filterDivergentSamples = false
+  let maxDivergencePercent = DEFAULT_MAX_DIVERGENCE_PERCENT
   let theme: ThemeMode = 'dark'
   let systemThemeMedia: MediaQueryList | null = null
 
@@ -60,6 +67,48 @@
     const minutes = Math.floor(totalSeconds / 60)
     const seconds = totalSeconds % 60
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+
+  function getIncludedSampleCount() {
+    const scores = divergence?.sampleScores ?? []
+    if (!filterDivergentSamples) return scores.length
+    let low = 0
+    let high = scores.length
+
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2)
+      if (scores[middle] <= maxDivergencePercent) low = middle + 1
+      else high = middle
+    }
+
+    return low
+  }
+
+  function getEffectiveStatus() {
+    if (!stats || !divergence || !filterDivergentSamples) return effective
+
+    const includedCount = getIncludedSampleCount()
+    if (includedCount < 3) return false
+
+    const maxMutations = stats.sequenceLength * CMAPLE_MAX_SUBS_PER_SITE
+    let remainingMutationBudget = stats.sequenceLength * CMAPLE_MEAN_SUBS_PER_SITE * includedCount
+
+    for (let index = 0; index < includedCount; index += 1) {
+      const mutationCount = divergence.cmapleMutationCounts[index] ?? 0
+      if (mutationCount > maxMutations) return false
+      remainingMutationBudget -= mutationCount
+      if (remainingMutationBudget < 0) return false
+    }
+
+    return true
+  }
+
+  function setFilterDivergentSamples(value: boolean) {
+    filterDivergentSamples = value
+  }
+
+  function setMaxDivergencePercent(value: number) {
+    maxDivergencePercent = value
   }
 
   function setTheme(nextTheme: ThemeMode) {
@@ -163,12 +212,14 @@
       if (message.type === 'error') {
         error = message.error
         stopTimer()
-        state = 'error'
+        state = stats ? 'ready' : 'error'
         return
       }
 
       if (message.type === 'preflight') {
         stats = message.stats
+        divergence = message.divergence
+        maxDivergencePercent = DEFAULT_MAX_DIVERGENCE_PERCENT
         effective = message.effective
         warnings = message.warnings
         error = ''
@@ -203,6 +254,7 @@
     fileName = ''
     error = ''
     stats = null
+    divergence = null
     effective = null
     warnings = []
     logs = []
@@ -270,6 +322,7 @@
     fileName = file.name
     error = ''
     stats = null
+    divergence = null
     effective = null
     warnings = []
     logs = []
@@ -298,6 +351,7 @@
   function runInference() {
     if (!currentId || state !== 'ready') return
     branchSupportReplicates = Math.max(1, Math.floor(Number(branchSupportReplicates) || 1000))
+    maxDivergencePercent = Math.max(0, Number(maxDivergencePercent) || DEFAULT_MAX_DIVERGENCE_PERCENT)
     error = ''
     logs = []
     startTimer()
@@ -308,6 +362,8 @@
       numThreads,
       computeBranchSupport,
       branchSupportReplicates,
+      filterDivergentSamples,
+      maxDivergencePercent,
     })
   }
 
@@ -325,10 +381,14 @@
     if (file) void loadFile(file)
   }
 
+  function openFilePicker() {
+    dropzoneInput?.click()
+  }
+
   function openDropzonePicker(event: MouseEvent) {
     const target = event.target as HTMLElement
     if (target.closest('.syrup-tuner') || target.closest('button') || target.closest('input')) return
-    dropzoneInput?.click()
+    openFilePicker()
   }
 
   function handleDropzoneKeydown(event: KeyboardEvent) {
@@ -336,7 +396,7 @@
     const target = event.target as HTMLElement
     if (target.closest('.syrup-tuner')) return
     event.preventDefault()
-    dropzoneInput?.click()
+    openFilePicker()
   }
 
   async function copyNewick() {
@@ -539,10 +599,7 @@
         {:else if state === 'error'}
           <div class="error" role="alert">{error}</div>
           <div class="modal-actions">
-            <label class="button-like">
-              Choose another file
-              <input type="file" accept=".fa,.fasta,.phy,.phylip,.maple,.txt" onchange={handleInput} />
-            </label>
+            <button type="button" onclick={openFilePicker}>Choose another file</button>
           </div>
         {:else}
           {#if stats}
@@ -561,12 +618,16 @@
               </div>
               <div>
                 <span>CMAPLE effective</span>
-                <strong>{effective ? 'Yes' : 'No'}</strong>
+                <strong>{getEffectiveStatus() ? 'Yes' : 'No'}</strong>
               </div>
             </div>
           {/if}
 
-          {#if effective === false}
+          {#if error}
+            <div class="error" role="alert">{error}</div>
+          {/if}
+
+          {#if getEffectiveStatus() === false}
             <div class="warning" role="alert">
               This data is likely not suitable for analysis with CMAPLE.
             </div>
@@ -603,6 +664,14 @@
                 <input type="checkbox" bind:checked={computeBranchSupport} disabled={state === 'running'} />
               </label>
             </div>
+            <DivergenceQualityFilter
+              {divergence}
+              enabled={filterDivergentSamples}
+              threshold={maxDivergencePercent}
+              onEnabledChange={setFilterDivergentSamples}
+              onThresholdChange={setMaxDivergencePercent}
+              disabled={state === 'running'}
+            />
           </div>
 
           {#if state === 'running' || logs.length}
@@ -622,12 +691,12 @@
 
           <div class="modal-actions">
             {#if state !== 'running'}
-              <button type="button" class="ghost" onclick={clearCurrent}>Choose another</button>
+              <button type="button" class="ghost" onclick={openFilePicker}>Choose another</button>
             {/if}
             {#if state === 'running'}
               <span class="run-timer" aria-live="polite">{formatElapsed(elapsedMs)}</span>
             {/if}
-            <button type="button" onclick={runInference} disabled={state !== 'ready'}>Run</button>
+            <button type="button" class="primary-button" onclick={runInference} disabled={state !== 'ready'}>Run</button>
           </div>
         {/if}
       </div>

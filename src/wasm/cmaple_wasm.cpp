@@ -1,15 +1,19 @@
 #include "../../vendor/cmaple/maple/cmaple.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <iomanip>
 #include <ios>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -24,6 +28,16 @@ struct LoadedAlignment {
   std::unique_ptr<cmaple::Alignment> alignment;
   bool effective;
   unsigned int file_size;
+};
+
+struct FilterResult {
+  unsigned int removed = 0;
+  unsigned int retained = 0;
+};
+
+struct SampleQuality {
+  double score = 0;
+  std::size_t mutation_count = 0;
 };
 
 std::unordered_map<unsigned int, LoadedAlignment> loaded_alignments;
@@ -188,6 +202,110 @@ std::string formatName(cmaple::Alignment::InputType format) {
   }
 }
 
+double sequenceQualityScore(const cmaple::Sequence& sequence,
+                            const unsigned int sequence_length) {
+  if (!sequence_length) return 0;
+
+  double impacted_sites = 0;
+  for (const auto& mutation : sequence) {
+    impacted_sites += mutation.getLength();
+  }
+
+  return impacted_sites / sequence_length;
+}
+
+std::vector<SampleQuality> getSortedSampleQuality(const cmaple::Alignment& alignment) {
+  std::vector<SampleQuality> samples;
+  samples.reserve(alignment.data.size());
+
+  const unsigned int sequence_length = alignment.ref_seq.size();
+  for (const auto& sequence : alignment.data) {
+    samples.push_back({
+        sequenceQualityScore(sequence, sequence_length),
+        sequence.size(),
+    });
+  }
+
+  std::sort(samples.begin(), samples.end(), [](const SampleQuality& left,
+                                               const SampleQuality& right) {
+    return left.score < right.score;
+  });
+  return samples;
+}
+
+void appendDivergenceSummary(std::ostringstream& out,
+                             const cmaple::Alignment& alignment) {
+  const std::vector<SampleQuality> samples = getSortedSampleQuality(alignment);
+  const double max_score = samples.empty() ? 0 : samples.back().score * 100;
+
+  out << ",\"divergence\":{"
+      << "\"sampleScores\":[";
+
+  for (std::size_t index = 0; index < samples.size(); ++index) {
+    if (index > 0) out << ",";
+    out << std::setprecision(6) << samples[index].score * 100;
+  }
+
+  out << "],\"cmapleMutationCounts\":[";
+
+  for (std::size_t index = 0; index < samples.size(); ++index) {
+    if (index > 0) out << ",";
+    out << samples[index].mutation_count;
+  }
+
+  out << "],\"maxScore\":" << std::setprecision(6) << max_score << "}";
+}
+
+class ScopedAlignmentQualityFilter {
+ public:
+  ScopedAlignmentQualityFilter(cmaple::Alignment& alignment,
+                               const double max_score_percent)
+      : alignment_(alignment) {
+    const double max_score = max_score_percent / 100.0;
+    const unsigned int sequence_length = alignment_.ref_seq.size();
+    original_data_ = std::move(alignment_.data);
+    retained_mask_.reserve(original_data_.size());
+    alignment_.data.reserve(original_data_.size());
+
+    for (auto& sequence : original_data_) {
+      const bool retained =
+          sequenceQualityScore(sequence, sequence_length) <= max_score;
+      retained_mask_.push_back(retained);
+      if (retained) {
+        alignment_.data.push_back(std::move(sequence));
+      } else {
+        ++result.removed;
+      }
+    }
+
+    result.retained = static_cast<unsigned int>(alignment_.data.size());
+  }
+
+  ~ScopedAlignmentQualityFilter() {
+    std::vector<cmaple::Sequence> restored;
+    restored.reserve(retained_mask_.size());
+
+    std::size_t retained_index = 0;
+    for (std::size_t index = 0; index < retained_mask_.size(); ++index) {
+      if (retained_mask_[index]) {
+        restored.push_back(std::move(alignment_.data[retained_index]));
+        ++retained_index;
+      } else {
+        restored.push_back(std::move(original_data_[index]));
+      }
+    }
+
+    alignment_.data = std::move(restored);
+  }
+
+  FilterResult result;
+
+ private:
+  cmaple::Alignment& alignment_;
+  std::vector<cmaple::Sequence> original_data_;
+  std::vector<bool> retained_mask_;
+};
+
 std::string preflightJson(const cmaple::Alignment& alignment,
                           const unsigned int file_size,
                           const bool effective,
@@ -203,22 +321,85 @@ std::string preflightJson(const cmaple::Alignment& alignment,
       << "\"sequenceCount\":" << alignment.data.size() << ","
       << "\"sequenceLength\":" << alignment.ref_seq.size()
       << "},"
-      << "\"effective\":" << (effective ? "true" : "false")
-      << ",\"warnings\":[]}";
+      << "\"effective\":" << (effective ? "true" : "false");
+  appendDivergenceSummary(out, alignment);
+  out << ",\"warnings\":[]}";
   return out.str();
 }
 
 std::string resultJson(const std::string& newick,
                        const double log_likelihood,
-                       const bool effective) {
+                       const bool effective,
+                       const unsigned int removed_samples) {
   std::ostringstream out;
   out << "{\"type\":\"result\","
       << "\"id\":\"\","
       << "\"newick\":\"" << jsonEscape(newick) << "\","
       << "\"logLikelihood\":" << std::setprecision(17) << log_likelihood
-      << ",\"effective\":" << (effective ? "true" : "false")
-      << ",\"warnings\":[]}";
+      << ",\"effective\":" << (effective ? "true" : "false");
+
+  if (removed_samples > 0) {
+    out << ",\"warnings\":[\"Removed " << removed_samples
+        << " sample" << (removed_samples == 1 ? "" : "s")
+        << " above the divergence/quality threshold.\"]}";
+  } else {
+    out << ",\"warnings\":[]}";
+  }
+
   return out.str();
+}
+
+std::string inferAlignment(cmaple::Alignment& alignment,
+                           int num_threads,
+                           int compute_branch_support,
+                           int branch_support_replicates,
+                           int filter_divergent_samples,
+                           double max_divergence_percent) {
+  unsigned int removed_samples = 0;
+  std::unique_ptr<ScopedAlignmentQualityFilter> scoped_filter;
+
+  if (filter_divergent_samples) {
+    if (max_divergence_percent < 0) max_divergence_percent = 0;
+    scoped_filter = std::make_unique<ScopedAlignmentQualityFilter>(
+        alignment, max_divergence_percent);
+    const FilterResult filter_result = scoped_filter->result;
+    removed_samples = filter_result.removed;
+
+    if (filter_result.retained < 3) {
+      std::ostringstream message;
+      message << "The divergence/quality filter would leave "
+              << filter_result.retained
+              << " sample" << (filter_result.retained == 1 ? "" : "s")
+              << ". CMAPLE requires at least 3 samples. Increase the threshold or turn filtering off.";
+      return errorJson(message.str());
+    }
+
+    std::cout << "Divergence / quality filter: retained "
+              << filter_result.retained << " of "
+              << (filter_result.retained + filter_result.removed)
+              << " samples";
+    if (filter_result.removed > 0) {
+      std::cout << " (" << filter_result.removed << " removed)";
+    }
+    std::cout << std::endl;
+  } else {
+    std::cout << "Divergence / quality filter: off" << std::endl;
+  }
+
+  const bool effective = cmaple::isEffective(alignment);
+  cmaple::Model model(cmaple::ModelBase::GTR, cmaple::SeqRegion::SEQ_DNA);
+  cmaple::Tree tree(&alignment, &model);
+
+  tree.infer(num_threads, cmaple::Tree::NORMAL_TREE_SEARCH, false, false);
+  if (compute_branch_support && branch_support_replicates > 0) {
+    tree.computeBranchSupport(num_threads, branch_support_replicates);
+  }
+
+  const double log_likelihood = tree.computeLh();
+  const std::string newick =
+      tree.exportNewick(cmaple::Tree::BIN_TREE, false, true);
+
+  return resultJson(newick, log_likelihood, effective, removed_samples);
 }
 
 std::unique_ptr<cmaple::Alignment> parseAlignment(const unsigned char* data,
@@ -353,7 +534,9 @@ extern "C" char* cmaple_infer(const unsigned char* data,
                                int format,
                                int num_threads,
                                int compute_branch_support,
-                               int branch_support_replicates) {
+                               int branch_support_replicates,
+                               int filter_divergent_samples,
+                               double max_divergence_percent) {
   try {
     if (data == nullptr || size == 0) {
       return copyResult(errorJson("Alignment file is empty."));
@@ -365,20 +548,12 @@ extern "C" char* cmaple_infer(const unsigned char* data,
     cmaple::verbose_mode = cmaple::VB_MED;
 
     auto alignment = parseAlignment(data, size, format);
-    const bool effective = cmaple::isEffective(*alignment);
-    cmaple::Model model(cmaple::ModelBase::GTR, cmaple::SeqRegion::SEQ_DNA);
-    cmaple::Tree tree(alignment.get(), &model);
-
-    tree.infer(num_threads, cmaple::Tree::NORMAL_TREE_SEARCH, false, false);
-    if (compute_branch_support && branch_support_replicates > 0) {
-      tree.computeBranchSupport(num_threads, branch_support_replicates);
-    }
-
-    const double log_likelihood = tree.computeLh();
-    const std::string newick =
-        tree.exportNewick(cmaple::Tree::BIN_TREE, false, true);
-
-    return copyResult(resultJson(newick, log_likelihood, effective));
+    return copyResult(inferAlignment(*alignment,
+                                     num_threads,
+                                     compute_branch_support,
+                                     branch_support_replicates,
+                                     filter_divergent_samples,
+                                     max_divergence_percent));
   } catch (const std::exception& err) {
     return copyResult(errorJson(err.what()));
   } catch (...) {
@@ -416,7 +591,9 @@ extern "C" char* cmaple_analyze(const unsigned char* data,
 extern "C" char* cmaple_infer_loaded(unsigned int handle,
                                       int num_threads,
                                       int compute_branch_support,
-                                      int branch_support_replicates) {
+                                      int branch_support_replicates,
+                                      int filter_divergent_samples,
+                                      double max_divergence_percent) {
   try {
     auto loaded = loaded_alignments.find(handle);
     if (loaded == loaded_alignments.end()) {
@@ -429,20 +606,12 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle,
     cmaple::verbose_mode = cmaple::VB_MED;
 
     cmaple::Alignment& alignment = *loaded->second.alignment;
-    cmaple::Model model(cmaple::ModelBase::GTR, cmaple::SeqRegion::SEQ_DNA);
-    cmaple::Tree tree(&alignment, &model);
-
-    tree.infer(num_threads, cmaple::Tree::NORMAL_TREE_SEARCH, false, false);
-    if (compute_branch_support && branch_support_replicates > 0) {
-      tree.computeBranchSupport(num_threads, branch_support_replicates);
-    }
-
-    const double log_likelihood = tree.computeLh();
-    const std::string newick =
-        tree.exportNewick(cmaple::Tree::BIN_TREE, false, true);
-
-    return copyResult(
-        resultJson(newick, log_likelihood, loaded->second.effective));
+    return copyResult(inferAlignment(alignment,
+                                     num_threads,
+                                     compute_branch_support,
+                                     branch_support_replicates,
+                                     filter_divergent_samples,
+                                     max_divergence_percent));
   } catch (const std::exception& err) {
     return copyResult(errorJson(err.what()));
   } catch (...) {

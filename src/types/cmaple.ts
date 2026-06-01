@@ -8,6 +8,12 @@ export type AlignmentStats = {
   sequenceLength: number
 }
 
+export type DivergenceSummary = {
+  sampleScores: number[]
+  cmapleMutationCounts: number[]
+  maxScore: number
+}
+
 export type CmapleWorkerRequest =
   | {
       type: 'load'
@@ -22,6 +28,8 @@ export type CmapleWorkerRequest =
       numThreads: number
       computeBranchSupport: boolean
       branchSupportReplicates: number
+      filterDivergentSamples: boolean
+      maxDivergencePercent: number
     }
   | {
       type: 'clear'
@@ -41,6 +49,7 @@ export type CmapleWorkerResponse =
       stats: AlignmentStats
       effective: boolean
       warnings: string[]
+      divergence: DivergenceSummary
     }
   | {
       type: 'result'

@@ -13,12 +13,16 @@ type EmscriptenModule = {
     numThreads: number,
     computeBranchSupport: number,
     branchSupportReplicates: number,
+    filterDivergentSamples: number,
+    maxDivergencePercent: number,
   ) => number
   _cmaple_infer_loaded: (
     handle: number,
     numThreads: number,
     computeBranchSupport: number,
     branchSupportReplicates: number,
+    filterDivergentSamples: number,
+    maxDivergencePercent: number,
   ) => number
 }
 
@@ -329,6 +333,8 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         `requestedThreads=${message.numThreads}`,
         `branchSupport=${message.computeBranchSupport}`,
         `branchSupportReplicates=${message.branchSupportReplicates}`,
+        `divergenceFilter=${message.filterDivergentSamples}`,
+        `maxDivergencePercent=${message.maxDivergencePercent}`,
         `cpus=${navigator.hardwareConcurrency || 'unknown'}`,
         `crossOriginIsolated=${crossOriginIsolated}`,
         `runtimeReadyMs=${ms(runtimeReadyMs)}`,
@@ -341,19 +347,24 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
       message.numThreads,
       message.computeBranchSupport ? 1 : 0,
       message.branchSupportReplicates,
+      message.filterDivergentSamples ? 1 : 0,
+      message.maxDivergencePercent,
     )
     if (!resultPtr) throw new Error('CMAPLE did not return a result.')
+    const decodeStartedAt = performance.now()
     const json = readCStringFromBytes(module.HEAPU8, resultPtr)
+    const decodeMs = performance.now() - decodeStartedAt
     module._cmaple_free(resultPtr)
     const inferMs = performance.now() - inferStartedAt
     const result = JSON.parse(json) as CmapleWorkerResponse
+    if (result.type !== 'log') result.id = message.id
     if (result.type === 'result') {
-      result.id = message.id
       bench(
         message.id,
         [
           'infer.done',
           `inferMs=${ms(inferMs)}`,
+          `decodeMs=${ms(decodeMs)}`,
           `totalMs=${ms(performance.now() - requestStartedAt)}`,
           `heapMiB=${heapMiB(module)}`,
           `logLikelihood=${result.logLikelihood}`,

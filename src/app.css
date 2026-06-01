@@ -99,6 +99,19 @@ button:hover:not(:disabled),
   color: var(--text);
 }
 
+.primary-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #17120b;
+  font-weight: 700;
+}
+
+.primary-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--text));
+  background: color-mix(in srgb, var(--accent) 84%, var(--text));
+  color: #17120b;
+}
+
 button:disabled,
 select:disabled,
 input:disabled {
@@ -442,6 +455,7 @@ h1 {
 
 .modal-actions {
   justify-content: flex-end;
+  justify-content: space-between;
 }
 
 .file-line {
