@@ -40,6 +40,17 @@ struct SampleQuality {
   std::size_t mutation_count = 0;
 };
 
+struct WarningSummary {
+  bool filter_divergent_samples = false;
+  double max_divergence_percent = 0;
+  unsigned int sequence_count = 0;
+  unsigned int removed_count = 0;
+  unsigned int sequence_length = 0;
+  unsigned int variable_columns = 0;
+  double mean_ambiguous_sites = 0;
+  double ambiguous_fraction = 0;
+};
+
 std::unordered_map<unsigned int, LoadedAlignment> loaded_alignments;
 unsigned int next_alignment_handle = 1;
 
@@ -214,6 +225,135 @@ double sequenceQualityScore(const cmaple::Sequence& sequence,
   return impacted_sites / sequence_length;
 }
 
+bool isConcreteDnaState(const cmaple::StateType state) {
+  return state < 4;
+}
+
+std::size_t mutationLength(const cmaple::Mutation& mutation,
+                           const unsigned int sequence_length) {
+  if (mutation.position >= sequence_length) return 0;
+  return std::min<std::size_t>(
+      mutation.getLength(),
+      static_cast<std::size_t>(sequence_length - mutation.position));
+}
+
+cmaple::StateType stateAtReferencePosition(const cmaple::Alignment& alignment,
+                                           const unsigned int position) {
+  return position < alignment.ref_seq.size()
+      ? alignment.ref_seq[position]
+      : cmaple::TYPE_N;
+}
+
+WarningSummary getWarningSummary(const cmaple::Alignment& alignment,
+                                 const bool filter_divergent_samples,
+                                 double max_divergence_percent) {
+  if (max_divergence_percent < 0) max_divergence_percent = 0;
+
+  WarningSummary summary;
+  summary.filter_divergent_samples = filter_divergent_samples;
+  summary.max_divergence_percent = max_divergence_percent;
+  summary.sequence_length = static_cast<unsigned int>(alignment.ref_seq.size());
+
+  if (summary.sequence_length == 0) return summary;
+
+  const double max_score = max_divergence_percent / 100.0;
+  std::vector<unsigned int> base_counts(summary.sequence_length * 4, 0);
+  double ambiguous_sites = 0;
+
+  for (const auto& sequence : alignment.data) {
+    const bool retained = !filter_divergent_samples ||
+        sequenceQualityScore(sequence, summary.sequence_length) <= max_score;
+
+    if (!retained) {
+      ++summary.removed_count;
+      continue;
+    }
+
+    ++summary.sequence_count;
+
+    for (unsigned int position = 0; position < summary.sequence_length; ++position) {
+      const cmaple::StateType ref_state = stateAtReferencePosition(alignment, position);
+      if (isConcreteDnaState(ref_state)) {
+        ++base_counts[position * 4 + ref_state];
+      } else {
+        ++ambiguous_sites;
+      }
+    }
+
+    for (const auto& mutation : sequence) {
+      const std::size_t length = mutationLength(mutation, summary.sequence_length);
+      if (length == 0) continue;
+
+      for (std::size_t offset = 0; offset < length; ++offset) {
+        const unsigned int position = mutation.position + offset;
+        const cmaple::StateType ref_state = stateAtReferencePosition(alignment, position);
+        if (isConcreteDnaState(ref_state)) {
+          unsigned int& ref_count = base_counts[position * 4 + ref_state];
+          if (ref_count > 0) --ref_count;
+        } else if (ambiguous_sites > 0) {
+          --ambiguous_sites;
+        }
+
+        if (isConcreteDnaState(mutation.type)) {
+          ++base_counts[position * 4 + mutation.type];
+        } else {
+          ++ambiguous_sites;
+        }
+      }
+    }
+  }
+
+  for (unsigned int position = 0; position < summary.sequence_length; ++position) {
+    unsigned int concrete_states = 0;
+    for (unsigned int state = 0; state < 4; ++state) {
+      if (base_counts[position * 4 + state] > 0) {
+        ++concrete_states;
+      }
+    }
+    if (concrete_states > 1) {
+      ++summary.variable_columns;
+    }
+  }
+
+  if (summary.sequence_count > 0) {
+    summary.mean_ambiguous_sites = ambiguous_sites / summary.sequence_count;
+    summary.ambiguous_fraction =
+        ambiguous_sites / (summary.sequence_count * summary.sequence_length);
+  }
+
+  return summary;
+}
+
+void appendWarningSummary(std::ostringstream& out,
+                          const WarningSummary& summary) {
+  out << "\"filterDivergentSamples\":"
+      << (summary.filter_divergent_samples ? "true" : "false")
+      << ",\"maxDivergencePercent\":" << std::setprecision(6)
+      << summary.max_divergence_percent
+      << ",\"sequenceCount\":" << summary.sequence_count
+      << ",\"removedCount\":" << summary.removed_count
+      << ",\"sequenceLength\":" << summary.sequence_length
+      << ",\"variableColumns\":" << summary.variable_columns
+      << ",\"meanAmbiguousSites\":" << std::setprecision(6)
+      << summary.mean_ambiguous_sites
+      << ",\"ambiguousFraction\":" << std::setprecision(6)
+      << summary.ambiguous_fraction;
+}
+
+std::string warningSummaryJson(const cmaple::Alignment& alignment,
+                               const bool filter_divergent_samples,
+                               const double max_divergence_percent) {
+  std::ostringstream out;
+  out << "{\"type\":\"warning-summary\","
+      << "\"id\":\"\","
+      << "\"warningSummary\":{";
+  appendWarningSummary(
+      out,
+      getWarningSummary(alignment, filter_divergent_samples, max_divergence_percent));
+  out << "}}";
+  return out.str();
+}
+
 std::vector<SampleQuality> getSortedSampleQuality(const cmaple::Alignment& alignment) {
   std::vector<SampleQuality> samples;
   samples.reserve(alignment.data.size());
@@ -323,7 +463,9 @@ std::string preflightJson(const cmaple::Alignment& alignment,
       << "},"
       << "\"effective\":" << (effective ? "true" : "false");
   appendDivergenceSummary(out, alignment);
-  out << ",\"warnings\":[]}";
+  out << ",\"warningSummary\":{";
+  appendWarningSummary(out, getWarningSummary(alignment, false, 0));
+  out << "},\"warnings\":[]}";
   return out.str();
 }
 
@@ -616,5 +758,28 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle,
     return copyResult(errorJson(err.what()));
   } catch (...) {
     return copyResult(errorJson("CMAPLE failed with an unknown error."));
+  }
+}
+
+extern "C" char* cmaple_warning_summary(unsigned int handle,
+                                         int filter_divergent_samples,
+                                         double max_divergence_percent) {
+  try {
+    auto loaded = loaded_alignments.find(handle);
+    if (loaded == loaded_alignments.end()) {
+      return copyResult(errorJson(
+          "The parsed alignment is no longer loaded. Drop the file again."));
+    }
+
+    cmaple::verbose_mode = cmaple::VB_QUIET;
+    const cmaple::Alignment& alignment = *loaded->second.alignment;
+    return copyResult(warningSummaryJson(
+        alignment,
+        filter_divergent_samples != 0,
+        max_divergence_percent));
+  } catch (const std::exception& err) {
+    return copyResult(errorJson(err.what()));
+  } catch (...) {
+    return copyResult(errorJson("CMAPLE warning summary failed with an unknown error."));
   }
 }

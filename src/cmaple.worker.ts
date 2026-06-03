@@ -1,4 +1,10 @@
-import type { AlignmentFormat, AlignmentStats, CmapleWorkerRequest, CmapleWorkerResponse } from './types/cmaple'
+import type {
+  AlignmentFormat,
+  AlignmentStats,
+  AlignmentWarningSummary,
+  CmapleWorkerRequest,
+  CmapleWorkerResponse,
+} from './types/cmaple'
 
 type EmscriptenModule = {
   HEAPU8: Uint8Array
@@ -21,6 +27,11 @@ type EmscriptenModule = {
     numThreads: number,
     computeBranchSupport: number,
     branchSupportReplicates: number,
+    filterDivergentSamples: number,
+    maxDivergencePercent: number,
+  ) => number
+  _cmaple_warning_summary: (
+    handle: number,
     filterDivergentSamples: number,
     maxDivergencePercent: number,
   ) => number
@@ -88,73 +99,28 @@ function readCStringFromBytes(bytes: Uint8Array, ptr: number) {
   return new TextDecoder().decode(Uint8Array.from(bytes.subarray(ptr, end)))
 }
 
-function getLikelyLongRunWarning(data: Uint8Array, stats: AlignmentStats) {
+function getLikelyLongRunWarning(summary: AlignmentWarningSummary) {
   const largeAlignmentWarning =
-    stats.sequenceCount * stats.sequenceLength >= 50_000_000
+    summary.sequenceCount * summary.sequenceLength >= 50_000_000
       ? 'This is a large alignment and may take several minutes in the browser, especially with SH-aLRT support enabled.'
       : ''
 
-  if (stats.format !== 'fasta') return largeAlignmentWarning
+  const variableColumnsPerKb = summary.sequenceLength ? summary.variableColumns / (summary.sequenceLength / 1000) : 0
+  const hasDenseVariation = summary.variableColumns >= 2000 && variableColumnsPerKb >= 50
+  const hasSubstantialAmbiguity = summary.meanAmbiguousSites >= 100 && summary.ambiguousFraction >= 0.01
+  const hasDifficultVariation = hasDenseVariation && hasSubstantialAmbiguity
 
-  try {
-    const text = new TextDecoder().decode(data)
-    const sequences: string[] = []
-    let current = ''
+  if (largeAlignmentWarning || hasDifficultVariation) {
+    const details = [
+      hasDifficultVariation ? `${summary.variableColumns.toLocaleString()} variable columns` : '',
+      hasDifficultVariation ? `${Math.round(summary.meanAmbiguousSites).toLocaleString()} ambiguous sites per sequence on average` : '',
+    ].filter(Boolean)
 
-    for (const rawLine of text.split(/\r?\n/)) {
-      const line = rawLine.trim()
-      if (!line) continue
-      if (line.startsWith('>')) {
-        if (current) sequences.push(current.toUpperCase())
-        current = ''
-        continue
-      }
-      current += line
-    }
-
-    if (current) sequences.push(current.toUpperCase())
-    if (!sequences.length) return largeAlignmentWarning
-
-    const sequenceLength = sequences[0].length
-    let ambiguousSites = 0
-    let variableColumns = 0
-
-    for (const sequence of sequences) {
-      for (let index = 0; index < sequenceLength; index += 1) {
-        if (!'ACGT'.includes(sequence[index])) ambiguousSites += 1
-      }
-    }
-
-    for (let index = 0; index < sequenceLength; index += 1) {
-      let bases = 0
-      if (sequences.some((sequence) => sequence[index] === 'A')) bases += 1
-      if (sequences.some((sequence) => sequence[index] === 'C')) bases += 1
-      if (sequences.some((sequence) => sequence[index] === 'G')) bases += 1
-      if (sequences.some((sequence) => sequence[index] === 'T')) bases += 1
-      if (bases > 1) variableColumns += 1
-    }
-
-    const meanAmbiguousSites = ambiguousSites / sequences.length
-    const ambiguousFraction = ambiguousSites / (sequences.length * sequenceLength)
-    const variableColumnsPerKb = variableColumns / (sequenceLength / 1000)
-    const hasDenseVariation = variableColumns >= 2000 && variableColumnsPerKb >= 50
-    const hasSubstantialAmbiguity = meanAmbiguousSites >= 100 && ambiguousFraction >= 0.01
-    const hasDifficultVariation = hasDenseVariation && hasSubstantialAmbiguity
-
-    if (largeAlignmentWarning || hasDifficultVariation) {
-      const details = [
-        hasDifficultVariation ? `${variableColumns.toLocaleString()} variable columns` : '',
-        hasDifficultVariation ? `${Math.round(meanAmbiguousSites).toLocaleString()} ambiguous sites per sequence on average` : '',
-      ].filter(Boolean)
-
-      return [
-        largeAlignmentWarning || 'This alignment may take several minutes in the browser, especially with SH-aLRT support enabled.',
-        details.length ? `It has ${details.join(' and ')}.` : '',
-        'Consider turning off SH-aLRT support or lowering the number of replicates for a faster less robust analysis.',
-      ].filter(Boolean).join(' ')
-    }
-  } catch {
-    return largeAlignmentWarning
+    return [
+      largeAlignmentWarning || 'This alignment may take several minutes in the browser, especially with SH-aLRT support enabled.',
+      details.length ? `It has ${details.join(' and ')}.` : '',
+      'Consider turning off SH-aLRT support or lowering the number of replicates for a faster less robust analysis.',
+    ].filter(Boolean).join(' ')
   }
 
   return largeAlignmentWarning
@@ -285,7 +251,7 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         preflight.id = message.id
         preflight.stats.fileName = message.fileName
         preflight.stats.fileSize = message.data.byteLength
-        const longRunWarning = getLikelyLongRunWarning(message.data, preflight.stats)
+        const longRunWarning = getLikelyLongRunWarning(preflight.warningSummary)
         if (longRunWarning) preflight.warnings = [...preflight.warnings, longRunWarning]
         stored.wasmHandle = preflight.handle
         stored.stats = preflight.stats
@@ -316,6 +282,43 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
     const stored = alignments.get(message.id)
     if (!stored) throw new Error('No alignment is loaded. Drop the file again.')
     if (!stored.wasmHandle) throw new Error('The parsed alignment is unavailable. Drop the file again.')
+
+    if (message.type === 'summarize-filter') {
+      const summaryStartedAt = performance.now()
+      const resultPtr = module._cmaple_warning_summary(
+        stored.wasmHandle,
+        message.filterDivergentSamples ? 1 : 0,
+        message.maxDivergencePercent,
+      )
+      if (!resultPtr) throw new Error('CMAPLE did not return a warning summary.')
+      const decodeStartedAt = performance.now()
+      const json = readCStringFromBytes(module.HEAPU8, resultPtr)
+      const decodeMs = performance.now() - decodeStartedAt
+      module._cmaple_free(resultPtr)
+      const result = JSON.parse(json) as CmapleWorkerResponse
+      if (result.type === 'error') {
+        post({ ...result, id: message.id })
+        return
+      }
+      if (result.type !== 'warning-summary') {
+        throw new Error('CMAPLE returned an unexpected warning summary.')
+      }
+      result.id = message.id
+      bench(
+        message.id,
+        [
+          'summary.done',
+          `summaryMs=${ms(performance.now() - summaryStartedAt)}`,
+          `decodeMs=${ms(decodeMs)}`,
+          `filter=${message.filterDivergentSamples}`,
+          `maxDivergencePercent=${message.maxDivergencePercent}`,
+          `sequenceCount=${result.warningSummary.sequenceCount}`,
+          `removedCount=${result.warningSummary.removedCount}`,
+        ].join(' '),
+      )
+      post(result)
+      return
+    }
 
     bench(
       message.id,

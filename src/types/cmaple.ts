@@ -14,6 +14,17 @@ export type DivergenceSummary = {
   maxScore: number
 }
 
+export type AlignmentWarningSummary = {
+  filterDivergentSamples: boolean
+  maxDivergencePercent: number
+  sequenceCount: number
+  removedCount: number
+  sequenceLength: number
+  variableColumns: number
+  meanAmbiguousSites: number
+  ambiguousFraction: number
+}
+
 export type CmapleWorkerRequest =
   | {
       type: 'load'
@@ -21,6 +32,12 @@ export type CmapleWorkerRequest =
       fileName: string
       format: AlignmentFormat
       data: Uint8Array
+    }
+  | {
+      type: 'summarize-filter'
+      id: string
+      filterDivergentSamples: boolean
+      maxDivergencePercent: number
     }
   | {
       type: 'infer'
@@ -50,6 +67,12 @@ export type CmapleWorkerResponse =
       effective: boolean
       warnings: string[]
       divergence: DivergenceSummary
+      warningSummary: AlignmentWarningSummary
+    }
+  | {
+      type: 'warning-summary'
+      id: string
+      warningSummary: AlignmentWarningSummary
     }
   | {
       type: 'result'

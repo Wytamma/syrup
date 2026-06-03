@@ -4,7 +4,7 @@
   import DivergenceQualityFilter from './lib/components/DivergenceQualityFilter.svelte'
   import SyrupLogo from './lib/components/SyrupLogo.svelte'
   import TreeViewer from './lib/components/TreeViewer.svelte'
-  import type { AlignmentStats, CmapleWorkerResponse, DivergenceSummary } from './types/cmaple'
+  import type { AlignmentStats, AlignmentWarningSummary, CmapleWorkerResponse, DivergenceSummary } from './types/cmaple'
 
   type AppState = 'idle' | 'preflight' | 'ready' | 'running' | 'done' | 'error'
   type ThemeMode = 'dark' | 'light'
@@ -15,6 +15,9 @@
   const DEFAULT_MAX_DIVERGENCE_PERCENT = 6.7
   const CMAPLE_MAX_SUBS_PER_SITE = 0.067
   const CMAPLE_MEAN_SUBS_PER_SITE = 0.02
+  const LARGE_ALIGNMENT_SITE_COUNT = 50_000_000
+  const LONG_RUN_RECOMMENDATION =
+    'Consider turning off SH-aLRT support or lowering the number of replicates for a faster less robust analysis.'
 
   let worker: Worker | null = null
   let state: AppState = 'idle'
@@ -25,8 +28,11 @@
   let error = ''
   let stats: AlignmentStats | null = null
   let divergence: DivergenceSummary | null = null
+  let warningSummary: AlignmentWarningSummary | null = null
   let effective: boolean | null = null
   let warnings: string[] = []
+  let displayedWarnings: string[] = []
+  let warningSummaryPending = false
   let logs: string[] = []
   let newick = ''
   let logLikelihood: number | null = null
@@ -58,6 +64,18 @@
     lastScrolledLogCount = logs.length
   })
 
+  $: nextDisplayedWarnings = getDisplayedWarnings(
+    stats,
+    filterDivergentSamples,
+    divergence,
+    warningSummary,
+    warnings,
+    maxDivergencePercent,
+  )
+  $: if (!warningSummaryPending || isCurrentWarningSummary(warningSummary, filterDivergentSamples, maxDivergencePercent)) {
+    displayedWarnings = nextDisplayedWarnings
+  }
+
   function formatFileSize(bytes: number) {
     if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -72,13 +90,17 @@
 
   function getIncludedSampleCount() {
     const scores = divergence?.sampleScores ?? []
-    if (!filterDivergentSamples) return scores.length
+    return countIncludedSamples(scores, filterDivergentSamples, maxDivergencePercent)
+  }
+
+  function countIncludedSamples(scores: number[], isFilterEnabled: boolean, threshold: number) {
+    if (!isFilterEnabled) return scores.length
     let low = 0
     let high = scores.length
 
     while (low < high) {
       const middle = Math.floor((low + high) / 2)
-      if (scores[middle] <= maxDivergencePercent) low = middle + 1
+      if (scores[middle] <= threshold) low = middle + 1
       else high = middle
     }
 
@@ -104,12 +126,91 @@
     return true
   }
 
+  function getDisplayedWarnings(
+    currentStats: AlignmentStats | null,
+    isFilterEnabled: boolean,
+    currentDivergence: DivergenceSummary | null,
+    currentWarningSummary: AlignmentWarningSummary | null,
+    currentWarnings: string[],
+    currentThreshold: number,
+  ) {
+    if (!currentStats || !isFilterEnabled || !currentDivergence) return currentWarnings
+    if (
+      !currentWarningSummary ||
+      currentWarningSummary.filterDivergentSamples !== isFilterEnabled ||
+      Math.abs(currentWarningSummary.maxDivergencePercent - currentThreshold) > 0.01
+    ) {
+      return currentWarnings
+    }
+
+    return getWarningsForSummary(currentWarningSummary, currentStats.sequenceCount)
+  }
+
+  function isCurrentWarningSummary(
+    currentWarningSummary: AlignmentWarningSummary | null,
+    isFilterEnabled: boolean,
+    currentThreshold: number,
+  ) {
+    if (!isFilterEnabled) return true
+    return (
+      !!currentWarningSummary &&
+      currentWarningSummary.filterDivergentSamples === isFilterEnabled &&
+      Math.abs(currentWarningSummary.maxDivergencePercent - currentThreshold) <= 0.01
+    )
+  }
+
+  function getWarningsForSummary(summary: AlignmentWarningSummary, originalSequenceCount: number) {
+    const isLargeAlignment = summary.sequenceCount * summary.sequenceLength >= LARGE_ALIGNMENT_SITE_COUNT
+    const variableColumnsPerKb = summary.sequenceLength ? summary.variableColumns / (summary.sequenceLength / 1000) : 0
+    const hasDenseVariation = summary.variableColumns >= 2000 && variableColumnsPerKb >= 50
+    const hasSubstantialAmbiguity = summary.meanAmbiguousSites >= 100 && summary.ambiguousFraction >= 0.01
+    const hasDifficultVariation = hasDenseVariation && hasSubstantialAmbiguity
+
+    if (!isLargeAlignment && !hasDifficultVariation) return []
+
+    const details = [
+      hasDifficultVariation ? `${summary.variableColumns.toLocaleString()} variable columns` : '',
+      hasDifficultVariation
+        ? `${Math.round(summary.meanAmbiguousSites).toLocaleString()} ambiguous sites per sequence on average`
+        : '',
+    ].filter(Boolean)
+    const prefix =
+      summary.filterDivergentSamples && summary.removedCount > 0
+        ? `With the current filter, ${summary.sequenceCount.toLocaleString()} of ${originalSequenceCount.toLocaleString()} samples will be analyzed (${summary.removedCount.toLocaleString()} removed). `
+        : ''
+    return [
+      [
+        prefix,
+        isLargeAlignment
+          ? 'This is a large alignment and may take several minutes in the browser, especially with SH-aLRT support enabled.'
+          : 'This alignment may take several minutes in the browser, especially with SH-aLRT support enabled.',
+        details.length ? ` It has ${details.join(' and ')}.` : '',
+        ' ',
+        LONG_RUN_RECOMMENDATION,
+      ].join(''),
+    ]
+  }
+
+  function requestWarningSummary() {
+    if (!currentId || state !== 'ready') return
+    warningSummaryPending = filterDivergentSamples
+    getWorker().postMessage({
+      type: 'summarize-filter',
+      id: currentId,
+      filterDivergentSamples,
+      maxDivergencePercent,
+    })
+  }
+
   function setFilterDivergentSamples(value: boolean) {
     filterDivergentSamples = value
+    if (!value) warningSummaryPending = false
+    requestWarningSummary()
   }
 
   function setMaxDivergencePercent(value: number) {
     maxDivergencePercent = value
+    requestWarningSummary()
   }
 
   function setTheme(nextTheme: ThemeMode) {
@@ -212,6 +313,7 @@
 
       if (message.type === 'error') {
         error = message.error
+        warningSummaryPending = false
         stopTimer()
         state = stats ? 'ready' : 'error'
         return
@@ -220,6 +322,8 @@
       if (message.type === 'preflight') {
         stats = message.stats
         divergence = message.divergence
+        warningSummary = message.warningSummary
+        warningSummaryPending = false
         maxDivergencePercent = DEFAULT_MAX_DIVERGENCE_PERCENT
         effective = message.effective
         warnings = message.warnings
@@ -229,11 +333,22 @@
         return
       }
 
+      if (message.type === 'warning-summary') {
+        const summary = message.warningSummary
+        if (
+          summary.filterDivergentSamples === filterDivergentSamples &&
+          Math.abs(summary.maxDivergencePercent - maxDivergencePercent) <= 0.01
+        ) {
+          warningSummary = summary
+          warningSummaryPending = false
+        }
+        return
+      }
+
       error = ''
       newick = message.newick
       logLikelihood = message.logLikelihood
       effective = message.effective
-      warnings = message.warnings
       stopTimer()
       state = 'done'
     }
@@ -257,6 +372,8 @@
     error = ''
     stats = null
     divergence = null
+    warningSummary = null
+    warningSummaryPending = false
     effective = null
     warnings = []
     logs = []
@@ -325,6 +442,8 @@
     error = ''
     stats = null
     divergence = null
+    warningSummary = null
+    warningSummaryPending = false
     effective = null
     warnings = []
     logs = []
@@ -650,8 +769,8 @@
             </div>
           {/if}
 
-          {#if warnings.length}
-            <div class="warning">{warnings.join(' ')}</div>
+          {#if displayedWarnings.length}
+            <div class="warning">{displayedWarnings.join(' ')}</div>
           {/if}
 
           <div class="options">
