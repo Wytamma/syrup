@@ -37,6 +37,7 @@
   let logLinesElement: HTMLDivElement | null = null
   let lastScrolledLogCount = 0
   let dropzoneInput: HTMLInputElement | null = null
+  let advancedOptionsElement: HTMLDetailsElement | null = null
   let copyFeedbackTimer: number | null = null
   let downloadFeedbackTimer: number | null = null
   let didCopyNewick = false
@@ -223,6 +224,7 @@
         effective = message.effective
         warnings = message.warnings
         error = ''
+        stopTimer()
         state = 'ready'
         return
       }
@@ -329,6 +331,7 @@
     newick = ''
     logLikelihood = null
     state = 'preflight'
+    startTimer()
 
     try {
       const data = new Uint8Array(await file.arrayBuffer())
@@ -343,6 +346,7 @@
         [data.buffer],
       )
     } catch (err) {
+      stopTimer()
       error = err instanceof Error ? err.message : 'Could not read the selected file.'
       state = 'error'
     }
@@ -350,6 +354,7 @@
 
   function runInference() {
     if (!currentId || state !== 'ready') return
+    if (advancedOptionsElement) advancedOptionsElement.open = false
     branchSupportReplicates = Math.max(1, Math.floor(Number(branchSupportReplicates) || 1000))
     maxDivergencePercent = Math.max(0, Number(maxDivergencePercent) || DEFAULT_MAX_DIVERGENCE_PERCENT)
     error = ''
@@ -595,7 +600,10 @@
         </div>
 
         {#if state === 'preflight'}
-          <div class="loading">Parsing alignment and checking CMAPLE effectiveness.</div>
+          <div class="loading">
+            <span>Parsing alignment and checking CMAPLE effectiveness.</span>
+            <strong aria-live="polite">{formatElapsed(elapsedMs)}</strong>
+          </div>
         {:else if state === 'error'}
           <div class="error" role="alert">{error}</div>
           <div class="modal-actions">
@@ -651,28 +659,34 @@
                 <strong>{numThreads}</strong>
               </label>
             </div>
-            <div class="option-group checkbox-number-group">
-              <span>SH-aLRT Replicates</span>
-              <label class="checkbox-option">
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  bind:value={branchSupportReplicates}
-                  disabled={state === 'running' || !computeBranchSupport}
-                />
-                <input type="checkbox" bind:checked={computeBranchSupport} disabled={state === 'running'} />
-              </label>
-            </div>
-            <DivergenceQualityFilter
-              {divergence}
-              enabled={filterDivergentSamples}
-              threshold={maxDivergencePercent}
-              onEnabledChange={setFilterDivergentSamples}
-              onThresholdChange={setMaxDivergencePercent}
-              disabled={state === 'running'}
-            />
           </div>
+
+          <details bind:this={advancedOptionsElement} class="advanced-options">
+            <summary>Advanced Options</summary>
+            <div class="options">
+              <div class="option-group checkbox-number-group">
+                <span>SH-aLRT Replicates</span>
+                <label class="checkbox-option">
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    bind:value={branchSupportReplicates}
+                    disabled={state === 'running' || !computeBranchSupport}
+                  />
+                  <input type="checkbox" bind:checked={computeBranchSupport} disabled={state === 'running'} />
+                </label>
+              </div>
+              <DivergenceQualityFilter
+                {divergence}
+                enabled={filterDivergentSamples}
+                threshold={maxDivergencePercent}
+                onEnabledChange={setFilterDivergentSamples}
+                onThresholdChange={setMaxDivergencePercent}
+                disabled={state === 'running'}
+              />
+            </div>
+          </details>
 
           {#if state === 'running' || logs.length}
             <div class="log-panel" aria-live="polite">

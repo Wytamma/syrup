@@ -9,11 +9,17 @@
   export let onEnabledChange: (enabled: boolean) => void = () => {}
   export let onThresholdChange: (threshold: number) => void = () => {}
 
+  const MARKER_RADIUS = 4.5
+  const MARKER_STROKE_WIDTH = 2
+
   let canvas: HTMLCanvasElement | null = null
   let track: HTMLSpanElement | null = null
+  let draftThreshold = threshold
+  let isAdjustingThreshold = false
 
-  $: sliderMax = Math.max(10, Math.ceil(Math.max(divergence?.maxScore ?? 0, threshold)))
-  $: thresholdPosition = Math.min(100, Math.max(0, (threshold / sliderMax) * 100))
+  $: if (!isAdjustingThreshold && threshold !== draftThreshold) draftThreshold = threshold
+  $: sliderMax = Math.max(10, Math.ceil(Math.max(divergence?.maxScore ?? 0, draftThreshold)))
+  $: thresholdPosition = Math.min(100, Math.max(0, (draftThreshold / sliderMax) * 100))
   $: includedSampleCount = countIncludedSamples()
   $: removedSampleCount = Math.max(0, (divergence?.sampleScores.length ?? 0) - includedSampleCount)
 
@@ -28,7 +34,12 @@
   }
 
   function handleThresholdInput(event: Event) {
-    onThresholdChange(Number((event.currentTarget as HTMLInputElement).value))
+    draftThreshold = Number((event.currentTarget as HTMLInputElement).value)
+  }
+
+  function handleThresholdChange(event: Event) {
+    draftThreshold = Number((event.currentTarget as HTMLInputElement).value)
+    onThresholdChange(draftThreshold)
   }
 
   function handleEnabledChange(event: Event) {
@@ -36,22 +47,26 @@
   }
 
   function updateThresholdFromPointer(event: PointerEvent) {
-    if (!track) return
+    if (!track) return draftThreshold
 
     const rect = track.getBoundingClientRect()
     const position = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
     const nextThreshold = position * getSliderMax()
-    onThresholdChange(Math.round(nextThreshold * 10) / 10)
+    draftThreshold = Math.round(nextThreshold * 10) / 10
+    return draftThreshold
   }
 
   function handleThresholdPointerDown(event: PointerEvent) {
     if (disabled || !enabled) return
 
     event.preventDefault()
+    isAdjustingThreshold = true
     updateThresholdFromPointer(event)
 
     const handlePointerMove = (moveEvent: PointerEvent) => updateThresholdFromPointer(moveEvent)
     const handlePointerUp = () => {
+      isAdjustingThreshold = false
+      onThresholdChange(draftThreshold)
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
     }
@@ -69,7 +84,7 @@
 
     while (low < high) {
       const middle = Math.floor((low + high) / 2)
-      if (scores[middle] <= threshold) low = middle + 1
+      if (scores[middle] <= draftThreshold) low = middle + 1
       else high = middle
     }
 
@@ -100,9 +115,9 @@
     context.globalAlpha = excluded ? 0.68 : 0.86
     context.fillStyle = excluded ? colors.excludedFill : colors.fill
     context.strokeStyle = excluded ? colors.excludedStroke : colors.stroke
-    context.lineWidth = 2
+    context.lineWidth = MARKER_STROKE_WIDTH
     context.beginPath()
-    context.arc(x, y, 4.5, 0, Math.PI * 2)
+    context.arc(x, y, MARKER_RADIUS, 0, Math.PI * 2)
     context.fill()
     context.stroke()
     context.globalAlpha = 1
@@ -151,14 +166,19 @@
       excludedStroke: getCanvasColor(styles, '--subtle', '#9d9d9d'),
       excludedFill: getCanvasColor(styles, '--surface', 'rgb(255 255 255 / 0.03)'),
     }
+    const trackRect = track?.getBoundingClientRect()
+    const thresholdX = trackRect
+      ? trackRect.left - rect.left + (thresholdPosition / 100) * trackRect.width
+      : (thresholdPosition / 100) * rect.width
 
     scores.forEach((score, scoreIndex) => {
       const position = getMarkerPosition(score, scoreIndex)
+      const markerX = getCanvasMarkerXCoordinate(position.left, rect.width)
       drawMarker(
         context,
-        getCanvasMarkerXCoordinate(position.left, rect.width),
+        markerX,
         getCanvasMarkerCoordinate(position.top, rect.height, 5.5),
-        enabled && score > threshold,
+        enabled && markerX - MARKER_RADIUS - MARKER_STROKE_WIDTH / 2 > thresholdX,
         colors,
       )
     })
@@ -168,21 +188,17 @@
 <div class="option-group divergence-option">
   <div class="option-heading">
     <span>Divergence / quality filter</span>
-    <strong>{formatPercent(threshold)}</strong>
+    <strong>{formatPercent(draftThreshold)}</strong>
   </div>
-  <label
-    class="divergence-control"
-    class:filter-enabled={enabled}
-    onpointerdown={handleThresholdPointerDown}
-  >
+  <div class="divergence-control" class:filter-enabled={enabled}>
     <input
       type="range"
       min="0"
       max={sliderMax}
       step="0.1"
-      value={threshold}
+      value={draftThreshold}
       oninput={handleThresholdInput}
-      onchange={handleThresholdInput}
+      onchange={handleThresholdChange}
       disabled={disabled || !enabled}
       aria-label="Maximum divergence or missing data"
     />
@@ -203,7 +219,7 @@
       ></span>
       <canvas bind:this={canvas} class="divergence-marker-canvas"></canvas>
     </span>
-  </label>
+  </div>
   {#if divergence}
     <div class="divergence-summary" aria-live="polite">
       <span>{includedSampleCount.toLocaleString()} included</span>

@@ -474,11 +474,21 @@ h1 {
 }
 
 .loading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 14px;
   border: 1px solid var(--border-soft);
   border-radius: 10px;
   color: var(--muted);
   background: var(--surface);
+}
+
+.loading strong {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
 .stats-grid {
@@ -526,6 +536,51 @@ h1 {
   grid-template-columns: 1fr;
   gap: 12px;
   padding-bottom: 4px;
+}
+
+.advanced-options {
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.advanced-options summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 750;
+  list-style: none;
+}
+
+.advanced-options summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-options summary::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--subtle);
+  border-bottom: 2px solid var(--subtle);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 140ms ease;
+}
+
+.advanced-options[open] summary {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.advanced-options[open] summary::after {
+  transform: rotate(225deg) translateY(-2px);
+}
+
+.advanced-options .options {
+  padding: 12px;
 }
 
 .options label {
@@ -612,7 +667,7 @@ input[type="range"] {
 }
 
 .log-lines {
-  max-height: 280px;
+  max-height: 180px;
   overflow: auto;
   padding: 10px 12px;
   color: var(--text);
