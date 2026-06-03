@@ -20,8 +20,9 @@
   $: if (!isAdjustingThreshold && threshold !== draftThreshold) draftThreshold = threshold
   $: sliderMax = Math.max(10, Math.ceil(Math.max(divergence?.maxScore ?? 0, draftThreshold)))
   $: thresholdPosition = Math.min(100, Math.max(0, (draftThreshold / sliderMax) * 100))
-  $: includedSampleCount = countIncludedSamples()
-  $: removedSampleCount = Math.max(0, (divergence?.sampleScores.length ?? 0) - includedSampleCount)
+  $: sampleScores = divergence?.sampleScores ?? []
+  $: includedSampleCount = countIncludedSamples(sampleScores, enabled, draftThreshold)
+  $: removedSampleCount = Math.max(0, sampleScores.length - includedSampleCount)
 
   afterUpdate(drawCanvas)
 
@@ -75,16 +76,15 @@
     window.addEventListener('pointerup', handlePointerUp)
   }
 
-  function countIncludedSamples() {
-    const scores = divergence?.sampleScores ?? []
-    if (!enabled) return scores.length
+  function countIncludedSamples(scores: number[], isEnabled: boolean, currentThreshold: number) {
+    if (!isEnabled) return scores.length
 
     let low = 0
     let high = scores.length
 
     while (low < high) {
       const middle = Math.floor((low + high) / 2)
-      if (scores[middle] <= draftThreshold) low = middle + 1
+      if (scores[middle] <= currentThreshold) low = middle + 1
       else high = middle
     }
 
