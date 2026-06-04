@@ -160,7 +160,8 @@ async function loadCmaple() {
     }
 
     try {
-      const scriptResponse = await fetch('/cmaple-threaded.js')
+      const runtimeAssetVersion = Date.now().toString(36)
+      const scriptResponse = await fetch(`/cmaple-threaded.js?v=${runtimeAssetVersion}`, { cache: 'no-store' })
       if (!scriptResponse.ok) {
         throw new Error('CMAPLE threaded artifact is missing. Run `npm run build:wasm` first.')
       }
@@ -172,7 +173,7 @@ async function loadCmaple() {
       const createCmapleModule = module.default as (options: Record<string, unknown>) => Promise<EmscriptenModule>
 
       const moduleInstance = await createCmapleModule({
-        locateFile: (path: string) => `/${path}`,
+        locateFile: (path: string) => `/${path}?v=${runtimeAssetVersion}`,
         mainScriptUrlOrBlob: scriptBlob,
         print: (message: string) => {
           post({ type: 'log', message, stream: 'stdout' })
