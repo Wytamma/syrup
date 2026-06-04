@@ -19,182 +19,205 @@ export type AppState = 'idle' | 'preflight' | 'ready' | 'running' | 'done' | 'er
 
 const ALIGNMENT_QUERY_PARAM = 'alignment'
 
-class CmapleApp {
-  worker: Worker | null = null
-  state: AppState = $state('idle')
-  currentId = $state('')
-  selectedFile: File | null = $state(null)
-  fileName = $state('')
-  error = $state('')
-  stats: AlignmentStats | null = $state(null)
-  divergence: DivergenceSummary | null = $state(null)
-  warningSummary: AlignmentWarningSummary | null = $state(null)
-  effective: boolean | null = $state(null)
-  warnings: string[] = $state([])
-  displayedWarnings: string[] = $state([])
-  warningSummaryPending = $state(false)
-  logs: string[] = $state([])
-  newick = $state('')
-  logLikelihood: number | null = $state(null)
-  showInternalLabels = $state(false)
-  showLeafLabels = $state(true)
-  elapsedMs = $state(0)
-  didCopyNewick = $state(false)
-  didDownloadNewick = $state(false)
-  numThreads = $state(Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1)))
-  maxThreads = Math.max(1, navigator.hardwareConcurrency || 1)
-  computeBranchSupport = $state(true)
-  branchSupportReplicates = $state(1000)
-  filterDivergentSamples = $state(false)
-  maxDivergencePercent = $state(DEFAULT_MAX_DIVERGENCE_PERCENT)
-  useConstantSites = $state(false)
-  constantSites: ConstantSiteCounts = $state({ a: 0, c: 0, g: 0, t: 0 })
-  constantSitesText = $state(formatConstantSites(this.constantSites))
-  didAutoDisableBranchSupportForConstantSites = $state(false)
+export function createCmapleApp() {
+  let worker: Worker | null = null
+  let timerId: number | null = null
+  let copyFeedbackTimer: number | null = null
+  let downloadFeedbackTimer: number | null = null
 
-  activeConstantSites: ConstantSiteCounts = $derived(this.useConstantSites ? this.constantSites : ZERO_CONSTANT_SITES)
-  adjustedSequenceLength = $derived(getAdjustedSequenceLength(this.stats, this.activeConstantSites))
-  adjustedDivergence = $derived(getAdjustedDivergence(this.divergence, this.stats, this.activeConstantSites))
-  effectiveStatus = $derived(
-    getEffectiveStatus(
-      this.stats,
-      this.adjustedDivergence,
-      this.filterDivergentSamples,
-      this.maxDivergencePercent,
-      this.activeConstantSites,
-      this.effective,
-    ),
-  )
-  nextDisplayedWarnings = $derived(
-    getDisplayedWarnings(
-      this.stats,
-      this.filterDivergentSamples,
-      this.divergence,
-      this.warningSummary,
-      this.warnings,
-      this.maxDivergencePercent,
-      this.activeConstantSites,
-    ),
-  )
+  const app = $state({
+    state: 'idle' as AppState,
+    currentId: '',
+    selectedFile: null as File | null,
+    fileName: '',
+    error: '',
+    stats: null as AlignmentStats | null,
+    divergence: null as DivergenceSummary | null,
+    warningSummary: null as AlignmentWarningSummary | null,
+    effective: null as boolean | null,
+    warnings: [] as string[],
+    displayedWarnings: [] as string[],
+    warningSummaryPending: false,
+    logs: [] as string[],
+    newick: '',
+    logLikelihood: null as number | null,
+    showInternalLabels: false,
+    showLeafLabels: true,
+    elapsedMs: 0,
+    didCopyNewick: false,
+    didDownloadNewick: false,
+    numThreads: Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1)),
+    maxThreads: Math.max(1, navigator.hardwareConcurrency || 1),
+    computeBranchSupport: true,
+    branchSupportReplicates: 1000,
+    filterDivergentSamples: false,
+    maxDivergencePercent: DEFAULT_MAX_DIVERGENCE_PERCENT,
+    useConstantSites: false,
+    constantSites: { a: 0, c: 0, g: 0, t: 0 } as ConstantSiteCounts,
+    constantSitesText: formatConstantSites(ZERO_CONSTANT_SITES),
+    didAutoDisableBranchSupportForConstantSites: false,
 
-  private timerId: number | null = null
-  private copyFeedbackTimer: number | null = null
-  private downloadFeedbackTimer: number | null = null
+    get activeConstantSites() {
+      return app.useConstantSites ? app.constantSites : ZERO_CONSTANT_SITES
+    },
+    get adjustedSequenceLength() {
+      return getAdjustedSequenceLength(app.stats, app.activeConstantSites)
+    },
+    get adjustedDivergence() {
+      return getAdjustedDivergence(app.divergence, app.stats, app.activeConstantSites)
+    },
+    get effectiveStatus() {
+      return getEffectiveStatus(
+        app.stats,
+        app.adjustedDivergence,
+        app.filterDivergentSamples,
+        app.maxDivergencePercent,
+        app.activeConstantSites,
+        app.effective,
+      )
+    },
+    get nextDisplayedWarnings() {
+      return getDisplayedWarnings(
+        app.stats,
+        app.filterDivergentSamples,
+        app.divergence,
+        app.warningSummary,
+        app.warnings,
+        app.maxDivergencePercent,
+        app.activeConstantSites,
+      )
+    },
 
-  constructor() {
-    $effect(() => {
-      if (
-        !this.warningSummaryPending ||
-        isCurrentWarningSummary(this.warningSummary, this.filterDivergentSamples, this.maxDivergencePercent, this.activeConstantSites)
-      ) {
-        this.displayedWarnings = this.nextDisplayedWarnings
-      }
-    })
+    destroy,
+    loadAlignmentFromQueryParam,
+    requestWarningSummary,
+    setFilterDivergentSamples,
+    setMaxDivergencePercent,
+    setConstantSiteCountsFromText,
+    setUseConstantSites,
+    clearCurrent,
+    loadAlignmentFromUrl,
+    loadFile,
+    runInference,
+    copyNewick,
+    downloadNewick,
+    toggleInternalLabels,
+    toggleLeafLabels,
+    returnToRunSettings,
+  })
+
+  $effect(() => {
+    if (
+      !app.warningSummaryPending ||
+      isCurrentWarningSummary(app.warningSummary, app.filterDivergentSamples, app.maxDivergencePercent, app.activeConstantSites)
+    ) {
+      app.displayedWarnings = app.nextDisplayedWarnings
+    }
+  })
+
+  function destroy() {
+    clearFeedbackTimer('copy')
+    clearFeedbackTimer('download')
+    if (app.currentId) worker?.postMessage({ type: 'clear', id: app.currentId })
+    stopTimer()
+    worker?.terminate()
+    worker = null
   }
 
-  destroy = () => {
-    this.clearFeedbackTimer('copy')
-    this.clearFeedbackTimer('download')
-    if (this.currentId) this.worker?.postMessage({ type: 'clear', id: this.currentId })
-    this.stopTimer()
-    this.worker?.terminate()
-    this.worker = null
-  }
-
-  loadAlignmentFromQueryParam = () => {
+  function loadAlignmentFromQueryParam() {
     if (typeof window === 'undefined') return
     const alignmentUrl = new URLSearchParams(window.location.search).get(ALIGNMENT_QUERY_PARAM)
-    if (alignmentUrl) void this.loadAlignmentFromUrl(alignmentUrl)
+    if (alignmentUrl) void loadAlignmentFromUrl(alignmentUrl)
   }
 
-  requestWarningSummary = () => {
-    if (!this.currentId || this.state !== 'ready') return
-    this.warningSummaryPending = this.filterDivergentSamples
-    this.getWorker().postMessage({
+  function requestWarningSummary() {
+    if (!app.currentId || app.state !== 'ready') return
+    app.warningSummaryPending = app.filterDivergentSamples
+    getWorker().postMessage({
       type: 'summarize-filter',
-      id: this.currentId,
-      filterDivergentSamples: this.filterDivergentSamples,
-      maxDivergencePercent: this.maxDivergencePercent,
-      constantSites: this.getActiveConstantSites(),
+      id: app.currentId,
+      filterDivergentSamples: app.filterDivergentSamples,
+      maxDivergencePercent: app.maxDivergencePercent,
+      constantSites: getActiveConstantSites(),
     })
   }
 
-  setFilterDivergentSamples = (value: boolean) => {
-    this.filterDivergentSamples = value
-    if (!value) this.warningSummaryPending = false
-    this.requestWarningSummary()
+  function setFilterDivergentSamples(value: boolean) {
+    app.filterDivergentSamples = value
+    if (!value) app.warningSummaryPending = false
+    requestWarningSummary()
   }
 
-  setMaxDivergencePercent = (value: number) => {
-    this.maxDivergencePercent = value
-    this.warningSummaryPending = false
+  function setMaxDivergencePercent(value: number) {
+    app.maxDivergencePercent = value
+    app.warningSummaryPending = false
   }
 
-  setConstantSiteCountsFromText = (value = this.constantSitesText, shouldRequestWarningSummary = true) => {
-    this.constantSitesText = value
+  function setConstantSiteCountsFromText(value = app.constantSitesText, shouldRequestWarningSummary = true) {
+    app.constantSitesText = value
     const parsedCounts = parseConstantSites(value)
     if (!parsedCounts) return
-    const hadConstantSites = getTotalConstantSites(this.constantSites) > 0
+    const hadConstantSites = getTotalConstantSites(app.constantSites) > 0
     const hasConstantSites = getTotalConstantSites(parsedCounts) > 0
-    this.constantSites = parsedCounts
-    if (hasConstantSites && !hadConstantSites) this.useConstantSites = true
-    if (this.useConstantSites && hasConstantSites && !hadConstantSites && !this.didAutoDisableBranchSupportForConstantSites) {
-      this.computeBranchSupport = false
-      this.didAutoDisableBranchSupportForConstantSites = true
+    app.constantSites = parsedCounts
+    if (hasConstantSites && !hadConstantSites) app.useConstantSites = true
+    if (app.useConstantSites && hasConstantSites && !hadConstantSites && !app.didAutoDisableBranchSupportForConstantSites) {
+      app.computeBranchSupport = false
+      app.didAutoDisableBranchSupportForConstantSites = true
     }
-    if (shouldRequestWarningSummary && this.filterDivergentSamples) this.requestWarningSummary()
+    if (shouldRequestWarningSummary && app.filterDivergentSamples) requestWarningSummary()
   }
 
-  setUseConstantSites = (value: boolean) => {
-    this.setConstantSiteCountsFromText(this.constantSitesText, false)
-    this.useConstantSites = value
-    if (value && getTotalConstantSites(this.constantSites) > 0 && !this.didAutoDisableBranchSupportForConstantSites) {
-      this.computeBranchSupport = false
-      this.didAutoDisableBranchSupportForConstantSites = true
+  function setUseConstantSites(value: boolean) {
+    setConstantSiteCountsFromText(app.constantSitesText, false)
+    app.useConstantSites = value
+    if (value && getTotalConstantSites(app.constantSites) > 0 && !app.didAutoDisableBranchSupportForConstantSites) {
+      app.computeBranchSupport = false
+      app.didAutoDisableBranchSupportForConstantSites = true
     }
-    if (this.filterDivergentSamples) this.requestWarningSummary()
+    if (app.filterDivergentSamples) requestWarningSummary()
   }
 
-  clearCurrent = () => {
-    if (this.currentId) {
-      this.worker?.postMessage({ type: 'clear', id: this.currentId })
+  function clearCurrent() {
+    if (app.currentId) {
+      worker?.postMessage({ type: 'clear', id: app.currentId })
     }
-    this.currentId = ''
-    this.selectedFile = null
-    this.fileName = ''
-    this.error = ''
-    this.stats = null
-    this.divergence = null
-    this.warningSummary = null
-    this.warningSummaryPending = false
-    this.effective = null
-    this.warnings = []
-    this.useConstantSites = false
-    this.constantSites = { a: 0, c: 0, g: 0, t: 0 }
-    this.constantSitesText = formatConstantSites(this.constantSites)
-    this.didAutoDisableBranchSupportForConstantSites = false
-    this.logs = []
-    this.newick = ''
-    this.logLikelihood = null
-    this.showInternalLabels = false
-    this.showLeafLabels = true
-    this.didCopyNewick = false
-    this.didDownloadNewick = false
-    this.clearFeedbackTimer('copy')
-    this.clearFeedbackTimer('download')
-    this.elapsedMs = 0
-    this.stopTimer()
-    this.state = 'idle'
+    app.currentId = ''
+    app.selectedFile = null
+    app.fileName = ''
+    app.error = ''
+    app.stats = null
+    app.divergence = null
+    app.warningSummary = null
+    app.warningSummaryPending = false
+    app.effective = null
+    app.warnings = []
+    app.useConstantSites = false
+    app.constantSites = { a: 0, c: 0, g: 0, t: 0 }
+    app.constantSitesText = formatConstantSites(app.constantSites)
+    app.didAutoDisableBranchSupportForConstantSites = false
+    app.logs = []
+    app.newick = ''
+    app.logLikelihood = null
+    app.showInternalLabels = false
+    app.showLeafLabels = true
+    app.didCopyNewick = false
+    app.didDownloadNewick = false
+    clearFeedbackTimer('copy')
+    clearFeedbackTimer('download')
+    app.elapsedMs = 0
+    stopTimer()
+    app.state = 'idle'
   }
 
-  loadAlignmentFromUrl = async (url: string) => {
+  async function loadAlignmentFromUrl(url: string) {
     const trimmedUrl = url.trim()
     if (!trimmedUrl) return
 
-    const fallbackName = this.getAlignmentFileNameFromUrl(trimmedUrl)
+    const fallbackName = getAlignmentFileNameFromUrl(trimmedUrl)
 
     try {
-      this.logs = [`Downloading alignment from ${trimmedUrl}`]
+      app.logs = [`Downloading alignment from ${trimmedUrl}`]
 
       const response = await fetch(trimmedUrl)
       if (!response.ok) {
@@ -206,45 +229,45 @@ class CmapleApp {
         type: blob.type || 'text/plain',
       })
 
-      await this.loadFile(file)
+      await loadFile(file)
     } catch (err) {
-      this.selectedFile = null
-      this.fileName = fallbackName
-      this.error = err instanceof Error ? err.message : 'Could not download the alignment from the provided URL.'
-      this.logs = []
-      this.state = 'error'
+      app.selectedFile = null
+      app.fileName = fallbackName
+      app.error = err instanceof Error ? err.message : 'Could not download the alignment from the provided URL.'
+      app.logs = []
+      app.state = 'error'
     }
   }
 
-  loadFile = async (file: File) => {
-    if (this.currentId) this.worker?.postMessage({ type: 'clear', id: this.currentId })
+  async function loadFile(file: File) {
+    if (app.currentId) worker?.postMessage({ type: 'clear', id: app.currentId })
 
-    this.currentId = crypto.randomUUID()
-    this.selectedFile = file
-    this.fileName = file.name
-    this.error = ''
-    this.stats = null
-    this.divergence = null
-    this.warningSummary = null
-    this.warningSummaryPending = false
-    this.effective = null
-    this.warnings = []
-    this.useConstantSites = false
-    this.constantSites = { a: 0, c: 0, g: 0, t: 0 }
-    this.constantSitesText = formatConstantSites(this.constantSites)
-    this.didAutoDisableBranchSupportForConstantSites = false
-    this.logs = []
-    this.newick = ''
-    this.logLikelihood = null
-    this.state = 'preflight'
-    this.startTimer()
+    app.currentId = crypto.randomUUID()
+    app.selectedFile = file
+    app.fileName = file.name
+    app.error = ''
+    app.stats = null
+    app.divergence = null
+    app.warningSummary = null
+    app.warningSummaryPending = false
+    app.effective = null
+    app.warnings = []
+    app.useConstantSites = false
+    app.constantSites = { a: 0, c: 0, g: 0, t: 0 }
+    app.constantSitesText = formatConstantSites(app.constantSites)
+    app.didAutoDisableBranchSupportForConstantSites = false
+    app.logs = []
+    app.newick = ''
+    app.logLikelihood = null
+    app.state = 'preflight'
+    startTimer()
 
     try {
       const data = new Uint8Array(await file.arrayBuffer())
-      this.getWorker().postMessage(
+      getWorker().postMessage(
         {
           type: 'load',
-          id: this.currentId,
+          id: app.currentId,
           fileName: file.name,
           format: 'auto',
           data,
@@ -252,73 +275,73 @@ class CmapleApp {
         [data.buffer],
       )
     } catch (err) {
-      this.stopTimer()
-      this.error = err instanceof Error ? err.message : 'Could not read the selected file.'
-      this.state = 'error'
+      stopTimer()
+      app.error = err instanceof Error ? err.message : 'Could not read the selected file.'
+      app.state = 'error'
     }
   }
 
-  runInference = () => {
-    if (!this.currentId || this.state !== 'ready') return
-    this.branchSupportReplicates = Math.max(1, Math.floor(Number(this.branchSupportReplicates) || 1000))
-    this.maxDivergencePercent = Math.max(0, Number(this.maxDivergencePercent) || DEFAULT_MAX_DIVERGENCE_PERCENT)
-    this.error = ''
-    this.logs = []
-    this.startTimer()
-    this.state = 'running'
-    this.getWorker().postMessage({
+  function runInference() {
+    if (!app.currentId || app.state !== 'ready') return
+    app.branchSupportReplicates = Math.max(1, Math.floor(Number(app.branchSupportReplicates) || 1000))
+    app.maxDivergencePercent = Math.max(0, Number(app.maxDivergencePercent) || DEFAULT_MAX_DIVERGENCE_PERCENT)
+    app.error = ''
+    app.logs = []
+    startTimer()
+    app.state = 'running'
+    getWorker().postMessage({
       type: 'infer',
-      id: this.currentId,
-      numThreads: this.numThreads,
-      computeBranchSupport: this.computeBranchSupport,
-      branchSupportReplicates: this.branchSupportReplicates,
-      filterDivergentSamples: this.filterDivergentSamples,
-      maxDivergencePercent: this.maxDivergencePercent,
-      constantSites: sanitizeConstantSites(this.activeConstantSites),
+      id: app.currentId,
+      numThreads: app.numThreads,
+      computeBranchSupport: app.computeBranchSupport,
+      branchSupportReplicates: app.branchSupportReplicates,
+      filterDivergentSamples: app.filterDivergentSamples,
+      maxDivergencePercent: app.maxDivergencePercent,
+      constantSites: sanitizeConstantSites(app.activeConstantSites),
     })
   }
 
-  copyNewick = async () => {
-    if (!this.newick) return
-    await navigator.clipboard.writeText(this.newick)
-    this.showActionFeedback('copy')
+  async function copyNewick() {
+    if (!app.newick) return
+    await navigator.clipboard.writeText(app.newick)
+    showActionFeedback('copy')
   }
 
-  downloadNewick = () => {
-    if (!this.newick) return
-    const blob = new Blob([this.newick], { type: 'text/plain;charset=utf-8' })
+  function downloadNewick() {
+    if (!app.newick) return
+    const blob = new Blob([app.newick], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    const baseName = this.fileName.replace(/\.[^.]+$/, '') || 'cmaple-tree'
+    const baseName = app.fileName.replace(/\.[^.]+$/, '') || 'cmaple-tree'
     link.href = url
     link.download = `${baseName}.nwk`
     link.click()
     URL.revokeObjectURL(url)
-    this.showActionFeedback('download')
+    showActionFeedback('download')
   }
 
-  toggleInternalLabels = () => {
-    this.showInternalLabels = !this.showInternalLabels
+  function toggleInternalLabels() {
+    app.showInternalLabels = !app.showInternalLabels
   }
 
-  toggleLeafLabels = () => {
-    this.showLeafLabels = !this.showLeafLabels
+  function toggleLeafLabels() {
+    app.showLeafLabels = !app.showLeafLabels
   }
 
-  returnToRunSettings = () => {
-    if (!this.currentId || !this.stats) return
-    this.error = ''
-    this.logs = []
-    this.elapsedMs = 0
-    this.stopTimer()
-    this.state = 'ready'
+  function returnToRunSettings() {
+    if (!app.currentId || !app.stats) return
+    app.error = ''
+    app.logs = []
+    app.elapsedMs = 0
+    stopTimer()
+    app.state = 'ready'
   }
 
-  private getActiveConstantSites = () => {
-    return this.useConstantSites ? this.constantSites : ZERO_CONSTANT_SITES
+  function getActiveConstantSites() {
+    return app.useConstantSites ? app.constantSites : ZERO_CONSTANT_SITES
   }
 
-  private getAlignmentFileNameFromUrl = (url: string) => {
+  function getAlignmentFileNameFromUrl(url: string) {
     try {
       if (url.startsWith('http') || url.startsWith('ftp')) {
         const parsedUrl = new URL(url)
@@ -332,61 +355,61 @@ class CmapleApp {
     }
   }
 
-  private stopTimer = () => {
-    if (this.timerId !== null) {
-      window.clearInterval(this.timerId)
-      this.timerId = null
+  function stopTimer() {
+    if (timerId !== null) {
+      window.clearInterval(timerId)
+      timerId = null
     }
   }
 
-  private startTimer = () => {
+  function startTimer() {
     const startedAt = Date.now()
-    this.elapsedMs = 0
-    this.stopTimer()
-    this.timerId = window.setInterval(() => {
-      this.elapsedMs = Date.now() - startedAt
+    app.elapsedMs = 0
+    stopTimer()
+    timerId = window.setInterval(() => {
+      app.elapsedMs = Date.now() - startedAt
     }, 250)
   }
 
-  private clearFeedbackTimer = (kind: 'copy' | 'download') => {
-    const timer = kind === 'copy' ? this.copyFeedbackTimer : this.downloadFeedbackTimer
+  function clearFeedbackTimer(kind: 'copy' | 'download') {
+    const timer = kind === 'copy' ? copyFeedbackTimer : downloadFeedbackTimer
     if (timer !== null) {
       window.clearTimeout(timer)
     }
 
-    if (kind === 'copy') this.copyFeedbackTimer = null
-    else this.downloadFeedbackTimer = null
+    if (kind === 'copy') copyFeedbackTimer = null
+    else downloadFeedbackTimer = null
   }
 
-  private showActionFeedback = (kind: 'copy' | 'download') => {
-    this.clearFeedbackTimer(kind)
+  function showActionFeedback(kind: 'copy' | 'download') {
+    clearFeedbackTimer(kind)
 
     if (kind === 'copy') {
-      this.didCopyNewick = true
-      this.copyFeedbackTimer = window.setTimeout(() => {
-        this.didCopyNewick = false
-        this.copyFeedbackTimer = null
+      app.didCopyNewick = true
+      copyFeedbackTimer = window.setTimeout(() => {
+        app.didCopyNewick = false
+        copyFeedbackTimer = null
       }, 1400)
       return
     }
 
-    this.didDownloadNewick = true
-    this.downloadFeedbackTimer = window.setTimeout(() => {
-      this.didDownloadNewick = false
-      this.downloadFeedbackTimer = null
+    app.didDownloadNewick = true
+    downloadFeedbackTimer = window.setTimeout(() => {
+      app.didDownloadNewick = false
+      downloadFeedbackTimer = null
     }, 1400)
   }
 
-  private getWorker = () => {
-    if (this.worker) return this.worker
+  function getWorker() {
+    if (worker) return worker
 
-    this.worker = new Worker(new URL('../../cmaple.worker.ts', import.meta.url), {
+    worker = new Worker(new URL('../../cmaple.worker.ts', import.meta.url), {
       type: 'module',
     })
 
-    this.worker.onmessage = (event: MessageEvent<CmapleWorkerResponse>) => {
+    worker.onmessage = (event: MessageEvent<CmapleWorkerResponse>) => {
       const message = event.data
-      if ('id' in message && message.id && message.id !== this.currentId) return
+      if ('id' in message && message.id && message.id !== app.currentId) return
 
       if (message.type === 'log') {
         const lines = message.message
@@ -394,67 +417,65 @@ class CmapleApp {
           .map((line) => line.trim())
           .filter(Boolean)
 
-        if (lines.length) this.logs = [...this.logs, ...lines].slice(-220)
+        if (lines.length) app.logs = [...app.logs, ...lines].slice(-220)
         return
       }
 
       if (message.type === 'error') {
-        this.error = message.error
-        this.warningSummaryPending = false
-        this.stopTimer()
-        this.state = this.stats ? 'ready' : 'error'
+        app.error = message.error
+        app.warningSummaryPending = false
+        stopTimer()
+        app.state = app.stats ? 'ready' : 'error'
         return
       }
 
       if (message.type === 'preflight') {
-        this.stats = message.stats
-        this.divergence = message.divergence
-        this.warningSummary = message.warningSummary
-        this.warningSummaryPending = false
-        this.maxDivergencePercent = DEFAULT_MAX_DIVERGENCE_PERCENT
-        this.effective = message.effective
-        this.warnings = message.warnings
-        this.numThreads = getDefaultThreadCount(message.warningSummary, this.maxThreads)
-        this.error = ''
-        this.stopTimer()
-        this.state = 'ready'
+        app.stats = message.stats
+        app.divergence = message.divergence
+        app.warningSummary = message.warningSummary
+        app.warningSummaryPending = false
+        app.maxDivergencePercent = DEFAULT_MAX_DIVERGENCE_PERCENT
+        app.effective = message.effective
+        app.warnings = message.warnings
+        app.numThreads = getDefaultThreadCount(message.warningSummary, app.maxThreads)
+        app.error = ''
+        stopTimer()
+        app.state = 'ready'
         return
       }
 
       if (message.type === 'warning-summary') {
         const summary = message.warningSummary
         if (
-          summary.filterDivergentSamples === this.filterDivergentSamples &&
-          Math.abs(summary.maxDivergencePercent - this.maxDivergencePercent) <= 0.01 &&
-          constantSitesEqual(summary.constantSites, this.getActiveConstantSites())
+          summary.filterDivergentSamples === app.filterDivergentSamples &&
+          Math.abs(summary.maxDivergencePercent - app.maxDivergencePercent) <= 0.01 &&
+          constantSitesEqual(summary.constantSites, getActiveConstantSites())
         ) {
-          this.warningSummary = summary
-          this.warningSummaryPending = false
+          app.warningSummary = summary
+          app.warningSummaryPending = false
         }
         return
       }
 
-      this.error = ''
-      this.newick = message.newick
-      this.logLikelihood = message.logLikelihood
-      this.effective = message.effective
-      this.warnings = message.warnings
-      this.stopTimer()
-      this.state = 'done'
+      app.error = ''
+      app.newick = message.newick
+      app.logLikelihood = message.logLikelihood
+      app.effective = message.effective
+      app.warnings = message.warnings
+      stopTimer()
+      app.state = 'done'
     }
 
-    this.worker.onerror = (event) => {
-      this.error = event.message || 'The CMAPLE worker failed.'
-      this.stopTimer()
-      this.state = 'error'
+    worker.onerror = (event) => {
+      app.error = event.message || 'The CMAPLE worker failed.'
+      stopTimer()
+      app.state = 'error'
     }
 
-    return this.worker
+    return worker
   }
+
+  return app
 }
 
-export type CmapleAppController = CmapleApp
-
-export function createCmapleApp() {
-  return new CmapleApp()
-}
+export type CmapleAppController = ReturnType<typeof createCmapleApp>
