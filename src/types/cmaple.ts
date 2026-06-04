@@ -17,12 +17,20 @@ export type DivergenceSummary = {
 export type AlignmentWarningSummary = {
   filterDivergentSamples: boolean
   maxDivergencePercent: number
+  constantSites: ConstantSiteCounts
   sequenceCount: number
   removedCount: number
   sequenceLength: number
   variableColumns: number
   meanAmbiguousSites: number
   ambiguousFraction: number
+}
+
+export type ConstantSiteCounts = {
+  a: number
+  c: number
+  g: number
+  t: number
 }
 
 export type CmapleWorkerRequest =
@@ -38,6 +46,7 @@ export type CmapleWorkerRequest =
       id: string
       filterDivergentSamples: boolean
       maxDivergencePercent: number
+      constantSites: ConstantSiteCounts
     }
   | {
       type: 'infer'
@@ -47,6 +56,7 @@ export type CmapleWorkerRequest =
       branchSupportReplicates: number
       filterDivergentSamples: boolean
       maxDivergencePercent: number
+      constantSites: ConstantSiteCounts
     }
   | {
       type: 'clear'

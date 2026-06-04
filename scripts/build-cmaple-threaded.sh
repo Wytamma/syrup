@@ -30,6 +30,10 @@ CMAPLE_COMPILE_OPT_LEVEL="${CMAPLE_COMPILE_OPT_LEVEL:--O3}"
 CMAPLE_LINK_OPT_LEVEL="${CMAPLE_LINK_OPT_LEVEL:--O3}"
 CMAPLE_SIMD_FLAG="${CMAPLE_SIMD_FLAG:--msimd128}"
 OBJECT_DIR="${CMAPLE_OBJECT_DIR:-build/cmaple-wasm-objects}"
+# 1.5 GiB avoids repeated WASM heap growth on larger benchmark alignments.
+CMAPLE_INITIAL_MEMORY_BYTES="${CMAPLE_INITIAL_MEMORY_BYTES:-1610612736}"
+CMAPLE_MAXIMUM_MEMORY_BYTES="${CMAPLE_MAXIMUM_MEMORY_BYTES:-2147483648}"
+CMAPLE_PROFILE_LOGS="${CMAPLE_PROFILE_LOGS:-0}"
 
 sources=(
   src/wasm/cmaple_wasm.cpp
@@ -62,7 +66,6 @@ common_flags=(
   -std=c++20
   -DNDEBUG
   -DNUM_STATES=4
-  -DSIMDE_NO_NATIVE
   -pthread
   -fopenmp=libomp
   -fexceptions
@@ -75,6 +78,10 @@ common_flags=(
   -Wno-deprecated-declarations
   -Wno-error=date-time
 )
+
+if [ "$CMAPLE_PROFILE_LOGS" = "1" ]; then
+  common_flags+=(-DCMAPLE_WASM_PROFILE_LOGS=1)
+fi
 
 mkdir -p public "$OBJECT_DIR"
 
@@ -103,9 +110,9 @@ em++ \
   -sNO_EXIT_RUNTIME=1 \
   -sDISABLE_EXCEPTION_CATCHING=0 \
   -sASSERTIONS=0 \
-  -sINITIAL_MEMORY=805306368 \
+  -sINITIAL_MEMORY="$CMAPLE_INITIAL_MEMORY_BYTES" \
   -sALLOW_MEMORY_GROWTH=1 \
-  -sMAXIMUM_MEMORY=2147483648 \
+  -sMAXIMUM_MEMORY="$CMAPLE_MAXIMUM_MEMORY_BYTES" \
   -sEXPORTED_FUNCTIONS='["_cmaple_alloc","_cmaple_free","_cmaple_release","_cmaple_analyze","_cmaple_infer","_cmaple_infer_loaded","_cmaple_warning_summary"]' \
   -sEXPORTED_RUNTIME_METHODS='["HEAPU8"]' \
   -o public/cmaple-threaded.js

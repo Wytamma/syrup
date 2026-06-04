@@ -4,6 +4,7 @@ import type {
   AlignmentWarningSummary,
   CmapleWorkerRequest,
   CmapleWorkerResponse,
+  ConstantSiteCounts,
 } from './types/cmaple'
 
 type EmscriptenModule = {
@@ -21,6 +22,10 @@ type EmscriptenModule = {
     branchSupportReplicates: number,
     filterDivergentSamples: number,
     maxDivergencePercent: number,
+    constantA: number,
+    constantC: number,
+    constantG: number,
+    constantT: number,
   ) => number
   _cmaple_infer_loaded: (
     handle: number,
@@ -29,11 +34,19 @@ type EmscriptenModule = {
     branchSupportReplicates: number,
     filterDivergentSamples: number,
     maxDivergencePercent: number,
+    constantA: number,
+    constantC: number,
+    constantG: number,
+    constantT: number,
   ) => number
   _cmaple_warning_summary: (
     handle: number,
     filterDivergentSamples: number,
     maxDivergencePercent: number,
+    constantA: number,
+    constantC: number,
+    constantG: number,
+    constantT: number,
   ) => number
 }
 
@@ -87,6 +100,15 @@ function ms(value: number) {
 
 function heapMiB(module: EmscriptenModule) {
   return bytesToMiB(module.HEAPU8.byteLength)
+}
+
+function sanitizeConstantSites(counts: ConstantSiteCounts) {
+  return {
+    a: Math.max(0, Math.floor(Number(counts.a) || 0)),
+    c: Math.max(0, Math.floor(Number(counts.c) || 0)),
+    g: Math.max(0, Math.floor(Number(counts.g) || 0)),
+    t: Math.max(0, Math.floor(Number(counts.t) || 0)),
+  }
 }
 
 function bench(id: string | undefined, message: string) {
@@ -284,11 +306,16 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
     if (!stored.wasmHandle) throw new Error('The parsed alignment is unavailable. Drop the file again.')
 
     if (message.type === 'summarize-filter') {
+      const constantSites = sanitizeConstantSites(message.constantSites)
       const summaryStartedAt = performance.now()
       const resultPtr = module._cmaple_warning_summary(
         stored.wasmHandle,
         message.filterDivergentSamples ? 1 : 0,
         message.maxDivergencePercent,
+        constantSites.a,
+        constantSites.c,
+        constantSites.g,
+        constantSites.t,
       )
       if (!resultPtr) throw new Error('CMAPLE did not return a warning summary.')
       const decodeStartedAt = performance.now()
@@ -312,6 +339,7 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
           `decodeMs=${ms(decodeMs)}`,
           `filter=${message.filterDivergentSamples}`,
           `maxDivergencePercent=${message.maxDivergencePercent}`,
+          `constantSites=${Object.values(constantSites).join(',')}`,
           `sequenceCount=${result.warningSummary.sequenceCount}`,
           `removedCount=${result.warningSummary.removedCount}`,
         ].join(' '),
@@ -320,6 +348,7 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
       return
     }
 
+    const constantSites = sanitizeConstantSites(message.constantSites)
     bench(
       message.id,
       [
@@ -338,6 +367,7 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         `branchSupportReplicates=${message.branchSupportReplicates}`,
         `divergenceFilter=${message.filterDivergentSamples}`,
         `maxDivergencePercent=${message.maxDivergencePercent}`,
+        `constantSites=${Object.values(constantSites).join(',')}`,
         `cpus=${navigator.hardwareConcurrency || 'unknown'}`,
         `crossOriginIsolated=${crossOriginIsolated}`,
         `runtimeReadyMs=${ms(runtimeReadyMs)}`,
@@ -352,6 +382,10 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
       message.branchSupportReplicates,
       message.filterDivergentSamples ? 1 : 0,
       message.maxDivergencePercent,
+      constantSites.a,
+      constantSites.c,
+      constantSites.g,
+      constantSites.t,
     )
     if (!resultPtr) throw new Error('CMAPLE did not return a result.')
     const decodeStartedAt = performance.now()

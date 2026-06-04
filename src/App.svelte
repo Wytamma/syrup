@@ -4,7 +4,7 @@
   import DivergenceQualityFilter from './lib/components/DivergenceQualityFilter.svelte'
   import SyrupLogo from './lib/components/SyrupLogo.svelte'
   import TreeViewer from './lib/components/TreeViewer.svelte'
-  import type { AlignmentStats, AlignmentWarningSummary, CmapleWorkerResponse, DivergenceSummary } from './types/cmaple'
+  import type { AlignmentStats, AlignmentWarningSummary, CmapleWorkerResponse, ConstantSiteCounts, DivergenceSummary } from './types/cmaple'
 
   type AppState = 'idle' | 'preflight' | 'ready' | 'running' | 'done' | 'error'
   type ThemeMode = 'dark' | 'light'
@@ -54,6 +54,10 @@
   let branchSupportReplicates = 1000
   let filterDivergentSamples = false
   let maxDivergencePercent = DEFAULT_MAX_DIVERGENCE_PERCENT
+  let useConstantSites = false
+  let constantSites: ConstantSiteCounts = { a: 0, c: 0, g: 0, t: 0 }
+  let constantSitesText = formatConstantSites(constantSites)
+  let didAutoDisableBranchSupportForConstantSites = false
   let theme: ThemeMode = 'dark'
   let systemThemeMedia: MediaQueryList | null = null
 
@@ -71,10 +75,15 @@
     warningSummary,
     warnings,
     maxDivergencePercent,
+    activeConstantSites,
   )
   $: if (!warningSummaryPending || isCurrentWarningSummary(warningSummary, filterDivergentSamples, maxDivergencePercent)) {
     displayedWarnings = nextDisplayedWarnings
   }
+  $: activeConstantSites = useConstantSites ? constantSites : { a: 0, c: 0, g: 0, t: 0 }
+  $: adjustedSequenceLength = getAdjustedSequenceLength(stats, activeConstantSites)
+  $: adjustedDivergence = getAdjustedDivergence(divergence, stats, activeConstantSites)
+  $: effectiveStatus = getEffectiveStatus(stats, adjustedDivergence, filterDivergentSamples, maxDivergencePercent, activeConstantSites, effective)
 
   function formatFileSize(bytes: number) {
     if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`
@@ -88,9 +97,78 @@
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
 
-  function getIncludedSampleCount() {
-    const scores = divergence?.sampleScores ?? []
-    return countIncludedSamples(scores, filterDivergentSamples, maxDivergencePercent)
+  function getIncludedSampleCount(
+    currentDivergence: DivergenceSummary | null = adjustedDivergence,
+    isFilterEnabled = filterDivergentSamples,
+    threshold = maxDivergencePercent,
+  ) {
+    const scores = currentDivergence?.sampleScores ?? []
+    return countIncludedSamples(scores, isFilterEnabled, threshold)
+  }
+
+  function getTotalConstantSites(counts: ConstantSiteCounts) {
+    return counts.a + counts.c + counts.g + counts.t
+  }
+
+  function getActiveConstantSites() {
+    return useConstantSites ? constantSites : { a: 0, c: 0, g: 0, t: 0 }
+  }
+
+  function sanitizeConstantSites(counts: ConstantSiteCounts): ConstantSiteCounts {
+    return {
+      a: Math.max(0, Math.floor(Number(counts.a) || 0)),
+      c: Math.max(0, Math.floor(Number(counts.c) || 0)),
+      g: Math.max(0, Math.floor(Number(counts.g) || 0)),
+      t: Math.max(0, Math.floor(Number(counts.t) || 0)),
+    }
+  }
+
+  function formatConstantSites(counts: ConstantSiteCounts) {
+    return [counts.a, counts.c, counts.g, counts.t].join(', ')
+  }
+
+  function parseConstantSites(value: string): ConstantSiteCounts | null {
+    const parts = value
+      .trim()
+      .split(/[\s,;]+/)
+      .filter(Boolean)
+
+    if (parts.length !== 4) return null
+
+    const counts = parts.map((part) => Number(part.replaceAll('_', '')))
+    if (counts.some((count) => !Number.isFinite(count) || count < 0)) return null
+
+    return sanitizeConstantSites({
+      a: counts[0],
+      c: counts[1],
+      g: counts[2],
+      t: counts[3],
+    })
+  }
+
+  function constantSitesEqual(left: ConstantSiteCounts | undefined, right: ConstantSiteCounts) {
+    return !!left && left.a === right.a && left.c === right.c && left.g === right.g && left.t === right.t
+  }
+
+  function getAdjustedSequenceLength(currentStats: AlignmentStats | null, counts: ConstantSiteCounts) {
+    return (currentStats?.sequenceLength ?? 0) + getTotalConstantSites(counts)
+  }
+
+  function getAdjustedDivergence(
+    currentDivergence: DivergenceSummary | null,
+    currentStats: AlignmentStats | null,
+    counts: ConstantSiteCounts,
+  ): DivergenceSummary | null {
+    if (!currentDivergence || !currentStats) return currentDivergence
+    const adjustedLength = getAdjustedSequenceLength(currentStats, counts)
+    if (adjustedLength <= 0 || adjustedLength === currentStats.sequenceLength) return currentDivergence
+
+    const scale = currentStats.sequenceLength / adjustedLength
+    return {
+      ...currentDivergence,
+      sampleScores: currentDivergence.sampleScores.map((score) => score * scale),
+      maxScore: currentDivergence.maxScore * scale,
+    }
   }
 
   function countIncludedSamples(scores: number[], isFilterEnabled: boolean, threshold: number) {
@@ -107,17 +185,25 @@
     return low
   }
 
-  function getEffectiveStatus() {
-    if (!stats || !divergence || !filterDivergentSamples) return effective
+  function getEffectiveStatus(
+    currentStats: AlignmentStats | null,
+    currentDivergence: DivergenceSummary | null,
+    isFilterEnabled: boolean,
+    threshold: number,
+    currentConstantSites: ConstantSiteCounts,
+    fallbackEffective: boolean | null,
+  ) {
+    if (!currentStats || !currentDivergence) return fallbackEffective
 
-    const includedCount = getIncludedSampleCount()
+    const includedCount = getIncludedSampleCount(currentDivergence, isFilterEnabled, threshold)
     if (includedCount < 3) return false
 
-    const maxMutations = stats.sequenceLength * CMAPLE_MAX_SUBS_PER_SITE
-    let remainingMutationBudget = stats.sequenceLength * CMAPLE_MEAN_SUBS_PER_SITE * includedCount
+    const adjustedLength = getAdjustedSequenceLength(currentStats, currentConstantSites)
+    const maxMutations = adjustedLength * CMAPLE_MAX_SUBS_PER_SITE
+    let remainingMutationBudget = adjustedLength * CMAPLE_MEAN_SUBS_PER_SITE * includedCount
 
     for (let index = 0; index < includedCount; index += 1) {
-      const mutationCount = divergence.cmapleMutationCounts[index] ?? 0
+      const mutationCount = currentDivergence.cmapleMutationCounts[index] ?? 0
       if (mutationCount > maxMutations) return false
       remainingMutationBudget -= mutationCount
       if (remainingMutationBudget < 0) return false
@@ -133,17 +219,35 @@
     currentWarningSummary: AlignmentWarningSummary | null,
     currentWarnings: string[],
     currentThreshold: number,
+    currentConstantSites: ConstantSiteCounts,
   ) {
-    if (!currentStats || !isFilterEnabled || !currentDivergence) return currentWarnings
+    if (!currentStats || !currentDivergence) return currentWarnings
+    const localWarnings = getConstantSiteWarnings(currentConstantSites)
+
+    if (!isFilterEnabled && getTotalConstantSites(currentConstantSites) > 0) {
+      return [...currentWarnings, ...localWarnings]
+    }
+
+    if (!isFilterEnabled) return currentWarnings
+
     if (
       !currentWarningSummary ||
       currentWarningSummary.filterDivergentSamples !== isFilterEnabled ||
-      Math.abs(currentWarningSummary.maxDivergencePercent - currentThreshold) > 0.01
+      Math.abs(currentWarningSummary.maxDivergencePercent - currentThreshold) > 0.01 ||
+      !constantSitesEqual(currentWarningSummary.constantSites, currentConstantSites)
     ) {
-      return currentWarnings
+      return [...currentWarnings, ...localWarnings]
     }
 
-    return getWarningsForSummary(currentWarningSummary, currentStats.sequenceCount)
+    return [...getWarningsForSummary(currentWarningSummary, currentStats), ...localWarnings]
+  }
+
+  function getConstantSiteWarnings(counts: ConstantSiteCounts) {
+    return getTotalConstantSites(counts) > 0
+      ? [
+          'With constant-site counts, inference uses an adjusted alignment length for likelihood, branch lengths, and SH-aLRT support. SH-aLRT may take longer when many constant sites are supplied.',
+        ]
+      : []
   }
 
   function isCurrentWarningSummary(
@@ -151,22 +255,22 @@
     isFilterEnabled: boolean,
     currentThreshold: number,
   ) {
-    if (!isFilterEnabled) return true
     return (
       !!currentWarningSummary &&
       currentWarningSummary.filterDivergentSamples === isFilterEnabled &&
-      Math.abs(currentWarningSummary.maxDivergencePercent - currentThreshold) <= 0.01
+      Math.abs(currentWarningSummary.maxDivergencePercent - currentThreshold) <= 0.01 &&
+      constantSitesEqual(currentWarningSummary.constantSites, getActiveConstantSites())
     )
   }
 
-  function getWarningsForSummary(summary: AlignmentWarningSummary, originalSequenceCount: number) {
-    const isLargeAlignment = summary.sequenceCount * summary.sequenceLength >= LARGE_ALIGNMENT_SITE_COUNT
-    const variableColumnsPerKb = summary.sequenceLength ? summary.variableColumns / (summary.sequenceLength / 1000) : 0
+  function getWarningsForSummary(summary: AlignmentWarningSummary, originalStats: AlignmentStats) {
+    const isLargeObservedAlignment = summary.sequenceCount * originalStats.sequenceLength >= LARGE_ALIGNMENT_SITE_COUNT
+    const variableColumnsPerKb = originalStats.sequenceLength ? summary.variableColumns / (originalStats.sequenceLength / 1000) : 0
     const hasDenseVariation = summary.variableColumns >= 2000 && variableColumnsPerKb >= 50
     const hasSubstantialAmbiguity = summary.meanAmbiguousSites >= 100 && summary.ambiguousFraction >= 0.01
     const hasDifficultVariation = hasDenseVariation && hasSubstantialAmbiguity
 
-    if (!isLargeAlignment && !hasDifficultVariation) return []
+    if (!isLargeObservedAlignment && !hasDifficultVariation) return []
 
     const details = [
       hasDifficultVariation ? `${summary.variableColumns.toLocaleString()} variable columns` : '',
@@ -176,12 +280,12 @@
     ].filter(Boolean)
     const prefix =
       summary.filterDivergentSamples && summary.removedCount > 0
-        ? `With the current filter, ${summary.sequenceCount.toLocaleString()} of ${originalSequenceCount.toLocaleString()} samples will be analyzed (${summary.removedCount.toLocaleString()} removed). `
+        ? `With the current filter, ${summary.sequenceCount.toLocaleString()} of ${originalStats.sequenceCount.toLocaleString()} samples will be analyzed (${summary.removedCount.toLocaleString()} removed). `
         : ''
     return [
       [
         prefix,
-        isLargeAlignment
+        isLargeObservedAlignment
           ? 'This is a large alignment and may take several minutes in the browser, especially with SH-aLRT support enabled.'
           : 'This alignment may take several minutes in the browser, especially with SH-aLRT support enabled.',
         details.length ? ` It has ${details.join(' and ')}.` : '',
@@ -189,6 +293,23 @@
         LONG_RUN_RECOMMENDATION,
       ].join(''),
     ]
+  }
+
+  function hasDifficultVariation(summary: AlignmentWarningSummary | null) {
+    if (!summary) return false
+    const variableColumnsPerKb = summary.sequenceLength ? summary.variableColumns / (summary.sequenceLength / 1000) : 0
+    const hasDenseVariation = summary.variableColumns >= 2000 && variableColumnsPerKb >= 50
+    const hasSubstantialAmbiguity = summary.meanAmbiguousSites >= 100 && summary.ambiguousFraction >= 0.01
+    return hasDenseVariation && hasSubstantialAmbiguity
+  }
+
+  function getDefaultThreadCount(
+    currentWarningSummary: AlignmentWarningSummary | null,
+    availableThreads: number,
+  ) {
+    if (availableThreads <= 1) return 1
+    if (hasDifficultVariation(currentWarningSummary)) return 1
+    return Math.max(1, Math.min(4, availableThreads))
   }
 
   function requestWarningSummary() {
@@ -199,6 +320,7 @@
       id: currentId,
       filterDivergentSamples,
       maxDivergencePercent,
+      constantSites: getActiveConstantSites(),
     })
   }
 
@@ -210,7 +332,32 @@
 
   function setMaxDivergencePercent(value: number) {
     maxDivergencePercent = value
-    requestWarningSummary()
+    warningSummaryPending = false
+  }
+
+  function setConstantSiteCountsFromText(value = constantSitesText, shouldRequestWarningSummary = true) {
+    constantSitesText = value
+    const parsedCounts = parseConstantSites(value)
+    if (!parsedCounts) return
+    const hadConstantSites = getTotalConstantSites(constantSites) > 0
+    const hasConstantSites = getTotalConstantSites(parsedCounts) > 0
+    constantSites = parsedCounts
+    if (hasConstantSites && !hadConstantSites) useConstantSites = true
+    if (useConstantSites && hasConstantSites && !hadConstantSites && !didAutoDisableBranchSupportForConstantSites) {
+      computeBranchSupport = false
+      didAutoDisableBranchSupportForConstantSites = true
+    }
+    if (shouldRequestWarningSummary && filterDivergentSamples) requestWarningSummary()
+  }
+
+  function setUseConstantSites(value: boolean) {
+    setConstantSiteCountsFromText(constantSitesText, false)
+    useConstantSites = value
+    if (value && getTotalConstantSites(constantSites) > 0 && !didAutoDisableBranchSupportForConstantSites) {
+      computeBranchSupport = false
+      didAutoDisableBranchSupportForConstantSites = true
+    }
+    if (filterDivergentSamples) requestWarningSummary()
   }
 
   function setTheme(nextTheme: ThemeMode) {
@@ -327,6 +474,7 @@
         maxDivergencePercent = DEFAULT_MAX_DIVERGENCE_PERCENT
         effective = message.effective
         warnings = message.warnings
+        numThreads = getDefaultThreadCount(message.warningSummary, maxThreads)
         error = ''
         stopTimer()
         state = 'ready'
@@ -337,7 +485,8 @@
         const summary = message.warningSummary
         if (
           summary.filterDivergentSamples === filterDivergentSamples &&
-          Math.abs(summary.maxDivergencePercent - maxDivergencePercent) <= 0.01
+          Math.abs(summary.maxDivergencePercent - maxDivergencePercent) <= 0.01 &&
+          constantSitesEqual(summary.constantSites, getActiveConstantSites())
         ) {
           warningSummary = summary
           warningSummaryPending = false
@@ -349,6 +498,7 @@
       newick = message.newick
       logLikelihood = message.logLikelihood
       effective = message.effective
+      warnings = message.warnings
       stopTimer()
       state = 'done'
     }
@@ -376,6 +526,10 @@
     warningSummaryPending = false
     effective = null
     warnings = []
+    useConstantSites = false
+    constantSites = { a: 0, c: 0, g: 0, t: 0 }
+    constantSitesText = formatConstantSites(constantSites)
+    didAutoDisableBranchSupportForConstantSites = false
     logs = []
     newick = ''
     logLikelihood = null
@@ -446,6 +600,10 @@
     warningSummaryPending = false
     effective = null
     warnings = []
+    useConstantSites = false
+    constantSites = { a: 0, c: 0, g: 0, t: 0 }
+    constantSitesText = formatConstantSites(constantSites)
+    didAutoDisableBranchSupportForConstantSites = false
     logs = []
     newick = ''
     logLikelihood = null
@@ -488,6 +646,7 @@
       branchSupportReplicates,
       filterDivergentSamples,
       maxDivergencePercent,
+      constantSites: sanitizeConstantSites(activeConstantSites),
     })
   }
 
@@ -690,7 +849,7 @@
           onclick={openDropzonePicker}
           onkeydown={handleDropzoneKeydown}
         >
-          <input bind:this={dropzoneInput} type="file" accept=".fa,.fasta,.phy,.phylip,.maple,.txt" onchange={handleInput} />
+          <input bind:this={dropzoneInput} type="file" accept=".fa,.fasta,.fna,.phy,.phylip,.maple,.txt" onchange={handleInput} />
           <SyrupLogo paused={state === 'running'} />
 
           <div class="drop-content">
@@ -754,7 +913,7 @@
               </div>
               <div>
                 <span>CMAPLE effective</span>
-                <strong>{getEffectiveStatus() ? 'Yes' : 'No'}</strong>
+                <strong>{effectiveStatus ? 'Yes' : 'No'}</strong>
               </div>
             </div>
           {/if}
@@ -763,7 +922,7 @@
             <div class="error" role="alert">{error}</div>
           {/if}
 
-          {#if getEffectiveStatus() === false}
+          {#if effectiveStatus === false}
             <div class="warning" role="alert">
               This data is likely not suitable for analysis with CMAPLE.
             </div>
@@ -803,6 +962,38 @@
                     disabled={state === 'running' || !computeBranchSupport}
                   />
                   <input type="checkbox" bind:checked={computeBranchSupport} disabled={state === 'running'} />
+                </label>
+              </div>
+              <div class="option-group constant-sites-group">
+                <div class="option-heading">
+                  <span>Constant sites</span>
+                  {#if stats && getTotalConstantSites(activeConstantSites) > 0}
+                    <span class="option-note">Adjusted length: {adjustedSequenceLength.toLocaleString()}</span>
+                  {/if}
+                </div>
+                <label class="checkbox-option constant-sites-option">
+                  <input
+                    class="constant-sites-input"
+                    type="text"
+                    inputmode="numeric"
+                    bind:value={constantSitesText}
+                    placeholder="A, C, G, T counts"
+                    aria-label="Constant site counts in A, C, G, T order"
+                    disabled={state === 'running'}
+                    oninput={(event) => setConstantSiteCountsFromText(event.currentTarget.value, false)}
+                    onchange={(event) => setConstantSiteCountsFromText(event.currentTarget.value)}
+                    onblur={(event) => {
+                      setConstantSiteCountsFromText(event.currentTarget.value)
+                      constantSitesText = formatConstantSites(constantSites)
+                    }}
+                  />
+                  <input
+                    type="checkbox"
+                    checked={useConstantSites}
+                    onchange={(event) => setUseConstantSites(event.currentTarget.checked)}
+                    disabled={state === 'running'}
+                    aria-label="Enable constant site counts"
+                  />
                 </label>
               </div>
               <DivergenceQualityFilter

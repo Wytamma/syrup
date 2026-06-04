@@ -258,7 +258,7 @@
     grid-template-columns: minmax(0, 1fr) 28px !important;
     align-items: center;
     gap: 12px;
-    min-height: 54px;
+    min-height: 48px;
     min-width: 0;
   }
 
@@ -266,9 +266,10 @@
     position: relative;
     z-index: 2;
     width: 100%;
-    height: 54px;
+    height: 48px;
     opacity: 0;
     pointer-events: none;
+    margin-top: 0px;
   }
 
   .divergence-control input[type="range"]:disabled {

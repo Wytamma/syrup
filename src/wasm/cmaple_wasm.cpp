@@ -1,6 +1,7 @@
 #include "../../vendor/cmaple/maple/cmaple.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
@@ -43,6 +44,10 @@ struct SampleQuality {
 struct WarningSummary {
   bool filter_divergent_samples = false;
   double max_divergence_percent = 0;
+  unsigned int constant_a = 0;
+  unsigned int constant_c = 0;
+  unsigned int constant_g = 0;
+  unsigned int constant_t = 0;
   unsigned int sequence_count = 0;
   unsigned int removed_count = 0;
   unsigned int sequence_length = 0;
@@ -51,8 +56,44 @@ struct WarningSummary {
   double ambiguous_fraction = 0;
 };
 
+struct ConstantSiteCounts {
+  unsigned int a = 0;
+  unsigned int c = 0;
+  unsigned int g = 0;
+  unsigned int t = 0;
+};
+
 std::unordered_map<unsigned int, LoadedAlignment> loaded_alignments;
 unsigned int next_alignment_handle = 1;
+
+double nowMs() {
+#if defined(CMAPLE_WASM_PROFILE_LOGS)
+  using Clock = std::chrono::steady_clock;
+  static const auto start = Clock::now();
+  const auto elapsed = Clock::now() - start;
+  return std::chrono::duration<double, std::milli>(elapsed).count();
+#else
+  return 0;
+#endif
+}
+
+void profileLog(const std::string& phase, const double elapsed_ms) {
+#if defined(CMAPLE_WASM_PROFILE_LOGS)
+  std::cout << "[CMAPLE profile] " << phase << "Ms="
+            << std::fixed << std::setprecision(1) << elapsed_ms << std::endl;
+#else
+  (void)phase;
+  (void)elapsed_ms;
+#endif
+}
+
+cmaple::VerboseMode inferenceVerboseMode() {
+#if defined(CMAPLE_WASM_PROFILE_LOGS)
+  return cmaple::VB_MAX;
+#else
+  return cmaple::VB_MED;
+#endif
+}
 
 class MemoryInputBuffer : public std::streambuf {
  public:
@@ -229,6 +270,10 @@ bool isConcreteDnaState(const cmaple::StateType state) {
   return state < 4;
 }
 
+unsigned int totalConstantSites(const ConstantSiteCounts& counts) {
+  return counts.a + counts.c + counts.g + counts.t;
+}
+
 std::size_t mutationLength(const cmaple::Mutation& mutation,
                            const unsigned int sequence_length) {
   if (mutation.position >= sequence_length) return 0;
@@ -236,6 +281,57 @@ std::size_t mutationLength(const cmaple::Mutation& mutation,
       mutation.getLength(),
       static_cast<std::size_t>(sequence_length - mutation.position));
 }
+
+void appendReferenceState(std::vector<cmaple::StateType>& ref_seq,
+                          const cmaple::StateType state,
+                          const unsigned int count) {
+  ref_seq.insert(ref_seq.end(), count, state);
+}
+
+class ScopedConstantSites {
+ public:
+  ScopedConstantSites(cmaple::Alignment& alignment,
+                      const ConstantSiteCounts& counts)
+      : alignment_(alignment),
+        counts_(counts),
+        original_ref_length_(alignment.ref_seq.size()),
+        applied_(false) {
+    apply();
+  }
+
+  void apply() {
+    if (applied_ || totalConstantSites(counts_) == 0) return;
+
+    // For CMAPLE's reference-plus-mutations representation, constant columns
+    // are represented by extending the reference. Per-sample mutations remain
+    // unchanged because every sample matches these added reference positions.
+    appendReferenceState(alignment_.ref_seq, 0, counts_.a);
+    appendReferenceState(alignment_.ref_seq, 1, counts_.c);
+    appendReferenceState(alignment_.ref_seq, 2, counts_.g);
+    appendReferenceState(alignment_.ref_seq, 3, counts_.t);
+    applied_ = true;
+  }
+
+  void restore() {
+    if (!applied_) return;
+    alignment_.ref_seq.resize(original_ref_length_);
+    applied_ = false;
+  }
+
+  ~ScopedConstantSites() {
+    restore();
+  }
+
+  bool applied() const {
+    return applied_;
+  }
+
+ private:
+  cmaple::Alignment& alignment_;
+  ConstantSiteCounts counts_;
+  std::size_t original_ref_length_;
+  bool applied_;
+};
 
 cmaple::StateType stateAtReferencePosition(const cmaple::Alignment& alignment,
                                            const unsigned int position) {
@@ -246,12 +342,17 @@ cmaple::StateType stateAtReferencePosition(const cmaple::Alignment& alignment,
 
 WarningSummary getWarningSummary(const cmaple::Alignment& alignment,
                                  const bool filter_divergent_samples,
-                                 double max_divergence_percent) {
+                                 double max_divergence_percent,
+                                 const ConstantSiteCounts& constant_sites) {
   if (max_divergence_percent < 0) max_divergence_percent = 0;
 
   WarningSummary summary;
   summary.filter_divergent_samples = filter_divergent_samples;
   summary.max_divergence_percent = max_divergence_percent;
+  summary.constant_a = constant_sites.a;
+  summary.constant_c = constant_sites.c;
+  summary.constant_g = constant_sites.g;
+  summary.constant_t = constant_sites.t;
   summary.sequence_length = static_cast<unsigned int>(alignment.ref_seq.size());
 
   if (summary.sequence_length == 0) return summary;
@@ -330,6 +431,12 @@ void appendWarningSummary(std::ostringstream& out,
       << (summary.filter_divergent_samples ? "true" : "false")
       << ",\"maxDivergencePercent\":" << std::setprecision(6)
       << summary.max_divergence_percent
+      << ",\"constantSites\":{"
+      << "\"a\":" << summary.constant_a
+      << ",\"c\":" << summary.constant_c
+      << ",\"g\":" << summary.constant_g
+      << ",\"t\":" << summary.constant_t
+      << "}"
       << ",\"sequenceCount\":" << summary.sequence_count
       << ",\"removedCount\":" << summary.removed_count
       << ",\"sequenceLength\":" << summary.sequence_length
@@ -342,14 +449,18 @@ void appendWarningSummary(std::ostringstream& out,
 
 std::string warningSummaryJson(const cmaple::Alignment& alignment,
                                const bool filter_divergent_samples,
-                               const double max_divergence_percent) {
+                               const double max_divergence_percent,
+                               const ConstantSiteCounts& constant_sites) {
   std::ostringstream out;
   out << "{\"type\":\"warning-summary\","
       << "\"id\":\"\","
       << "\"warningSummary\":{";
   appendWarningSummary(
       out,
-      getWarningSummary(alignment, filter_divergent_samples, max_divergence_percent));
+      getWarningSummary(alignment,
+                        filter_divergent_samples,
+                        max_divergence_percent,
+                        constant_sites));
   out << "}}";
   return out.str();
 }
@@ -464,7 +575,7 @@ std::string preflightJson(const cmaple::Alignment& alignment,
       << "\"effective\":" << (effective ? "true" : "false");
   appendDivergenceSummary(out, alignment);
   out << ",\"warningSummary\":{";
-  appendWarningSummary(out, getWarningSummary(alignment, false, 0));
+  appendWarningSummary(out, getWarningSummary(alignment, false, 0, {}));
   out << "},\"warnings\":[]}";
   return out.str();
 }
@@ -480,13 +591,20 @@ std::string resultJson(const std::string& newick,
       << "\"logLikelihood\":" << std::setprecision(17) << log_likelihood
       << ",\"effective\":" << (effective ? "true" : "false");
 
+  std::vector<std::string> warnings;
   if (removed_samples > 0) {
-    out << ",\"warnings\":[\"Removed " << removed_samples
-        << " sample" << (removed_samples == 1 ? "" : "s")
-        << " above the divergence/quality threshold.\"]}";
-  } else {
-    out << ",\"warnings\":[]}";
+    std::ostringstream warning;
+    warning << "Removed " << removed_samples
+            << " sample" << (removed_samples == 1 ? "" : "s")
+            << " above the divergence/quality threshold.";
+    warnings.push_back(warning.str());
   }
+  out << ",\"warnings\":[";
+  for (std::size_t index = 0; index < warnings.size(); ++index) {
+    if (index > 0) out << ",";
+    out << "\"" << jsonEscape(warnings[index]) << "\"";
+  }
+  out << "]}";
 
   return out.str();
 }
@@ -496,7 +614,8 @@ std::string inferAlignment(cmaple::Alignment& alignment,
                            int compute_branch_support,
                            int branch_support_replicates,
                            int filter_divergent_samples,
-                           double max_divergence_percent) {
+                           double max_divergence_percent,
+                           const ConstantSiteCounts& constant_sites) {
   unsigned int removed_samples = 0;
   std::unique_ptr<ScopedAlignmentQualityFilter> scoped_filter;
 
@@ -528,18 +647,29 @@ std::string inferAlignment(cmaple::Alignment& alignment,
     std::cout << "Divergence / quality filter: off" << std::endl;
   }
 
+  ScopedConstantSites scoped_constant_sites(alignment, constant_sites);
   const bool effective = cmaple::isEffective(alignment);
   cmaple::Model model(cmaple::ModelBase::GTR, cmaple::SeqRegion::SEQ_DNA);
   cmaple::Tree tree(&alignment, &model);
 
+  double phase_started_ms = nowMs();
   tree.infer(num_threads, cmaple::Tree::NORMAL_TREE_SEARCH, false, false);
+  profileLog("treeInfer", nowMs() - phase_started_ms);
+
   if (compute_branch_support && branch_support_replicates > 0) {
+    phase_started_ms = nowMs();
     tree.computeBranchSupport(num_threads, branch_support_replicates);
+    profileLog("branchSupport", nowMs() - phase_started_ms);
   }
 
+  phase_started_ms = nowMs();
   const double log_likelihood = tree.computeLh();
+  profileLog("computeLh", nowMs() - phase_started_ms);
+
+  phase_started_ms = nowMs();
   const std::string newick =
       tree.exportNewick(cmaple::Tree::BIN_TREE, false, true);
+  profileLog("exportNewick", nowMs() - phase_started_ms);
 
   return resultJson(newick, log_likelihood, effective, removed_samples);
 }
@@ -678,7 +808,11 @@ extern "C" char* cmaple_infer(const unsigned char* data,
                                int compute_branch_support,
                                int branch_support_replicates,
                                int filter_divergent_samples,
-                               double max_divergence_percent) {
+                               double max_divergence_percent,
+                               unsigned int constant_a,
+                               unsigned int constant_c,
+                               unsigned int constant_g,
+                               unsigned int constant_t) {
   try {
     if (data == nullptr || size == 0) {
       return copyResult(errorJson("Alignment file is empty."));
@@ -687,15 +821,18 @@ extern "C" char* cmaple_infer(const unsigned char* data,
     normalizeNumThreads(num_threads);
     normalizeBranchSupportReplicates(branch_support_replicates);
 
-    cmaple::verbose_mode = cmaple::VB_MED;
+    cmaple::verbose_mode = inferenceVerboseMode();
 
     auto alignment = parseAlignment(data, size, format);
+    const ConstantSiteCounts constant_sites{
+        constant_a, constant_c, constant_g, constant_t};
     return copyResult(inferAlignment(*alignment,
                                      num_threads,
                                      compute_branch_support,
                                      branch_support_replicates,
                                      filter_divergent_samples,
-                                     max_divergence_percent));
+                                     max_divergence_percent,
+                                     constant_sites));
   } catch (const std::exception& err) {
     return copyResult(errorJson(err.what()));
   } catch (...) {
@@ -735,7 +872,11 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle,
                                       int compute_branch_support,
                                       int branch_support_replicates,
                                       int filter_divergent_samples,
-                                      double max_divergence_percent) {
+                                      double max_divergence_percent,
+                                      unsigned int constant_a,
+                                      unsigned int constant_c,
+                                      unsigned int constant_g,
+                                      unsigned int constant_t) {
   try {
     auto loaded = loaded_alignments.find(handle);
     if (loaded == loaded_alignments.end()) {
@@ -745,15 +886,18 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle,
 
     normalizeNumThreads(num_threads);
     normalizeBranchSupportReplicates(branch_support_replicates);
-    cmaple::verbose_mode = cmaple::VB_MED;
+    cmaple::verbose_mode = inferenceVerboseMode();
 
     cmaple::Alignment& alignment = *loaded->second.alignment;
+    const ConstantSiteCounts constant_sites{
+        constant_a, constant_c, constant_g, constant_t};
     return copyResult(inferAlignment(alignment,
                                      num_threads,
                                      compute_branch_support,
                                      branch_support_replicates,
                                      filter_divergent_samples,
-                                     max_divergence_percent));
+                                     max_divergence_percent,
+                                     constant_sites));
   } catch (const std::exception& err) {
     return copyResult(errorJson(err.what()));
   } catch (...) {
@@ -763,7 +907,11 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle,
 
 extern "C" char* cmaple_warning_summary(unsigned int handle,
                                          int filter_divergent_samples,
-                                         double max_divergence_percent) {
+                                         double max_divergence_percent,
+                                         unsigned int constant_a,
+                                         unsigned int constant_c,
+                                         unsigned int constant_g,
+                                         unsigned int constant_t) {
   try {
     auto loaded = loaded_alignments.find(handle);
     if (loaded == loaded_alignments.end()) {
@@ -772,11 +920,14 @@ extern "C" char* cmaple_warning_summary(unsigned int handle,
     }
 
     cmaple::verbose_mode = cmaple::VB_QUIET;
-    const cmaple::Alignment& alignment = *loaded->second.alignment;
+    cmaple::Alignment& alignment = *loaded->second.alignment;
+    const ConstantSiteCounts constant_sites{
+        constant_a, constant_c, constant_g, constant_t};
     return copyResult(warningSummaryJson(
         alignment,
         filter_divergent_samples != 0,
-        max_divergence_percent));
+        max_divergence_percent,
+        constant_sites));
   } catch (const std::exception& err) {
     return copyResult(errorJson(err.what()));
   } catch (...) {
