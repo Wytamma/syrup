@@ -591,20 +591,7 @@ std::string resultJson(const std::string& newick,
       << "\"logLikelihood\":" << std::setprecision(17) << log_likelihood
       << ",\"effective\":" << (effective ? "true" : "false");
 
-  std::vector<std::string> warnings;
-  if (removed_samples > 0) {
-    std::ostringstream warning;
-    warning << "Removed " << removed_samples
-            << " sample" << (removed_samples == 1 ? "" : "s")
-            << " above the divergence/quality threshold.";
-    warnings.push_back(warning.str());
-  }
-  out << ",\"warnings\":[";
-  for (std::size_t index = 0; index < warnings.size(); ++index) {
-    if (index > 0) out << ",";
-    out << "\"" << jsonEscape(warnings[index]) << "\"";
-  }
-  out << "]}";
+  out << ",\"warnings\":[]}";
 
   return out.str();
 }
