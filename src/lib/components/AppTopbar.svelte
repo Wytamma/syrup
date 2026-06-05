@@ -9,7 +9,7 @@
 <header class:tree-topbar={fixed} class="app-topbar">
   <span class="brandmark">SYRUP</span>
   <div class="app-topbar-actions">
-    <a class="docs-link" href="/?alignment=/B.1.429.fa">
+    <a class="docs-link" href="/?alignment=/B.1.429.maple">
       EXAMPLE
     </a>
     <a class="docs-link" href="https://github.com/iqtree/cmaple/wiki/User-Manual" target="_blank" rel="noreferrer">
