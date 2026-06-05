@@ -200,8 +200,8 @@ export function createCmapleApp() {
 
   function setMaxDivergencePercent(value: number) {
     app.maxDivergencePercent = value
-    app.warningSummaryPending = false
     refreshDerivedAlignmentState()
+    if (app.filterDivergentSamples) requestWarningSummary()
   }
 
   function setConstantSiteCountsFromText(value = app.constantSitesText, shouldRequestWarningSummary = true) {
