@@ -3,6 +3,7 @@
   import { formatElapsed, formatFileSize } from '../cmaple-settings'
   import type {
     AlignmentStats,
+    AlignmentWarningSummary,
     BranchSupportMethod,
     ConstantSiteCounts,
     DivergenceSummary,
@@ -18,6 +19,7 @@
   export let fileName = ''
   export let error = ''
   export let stats: AlignmentStats | null = null
+  export let warningSummary: AlignmentWarningSummary | null = null
   export let getDivergence: () => DivergenceSummary | null = () => null
   export let effectiveStatus: boolean | null = null
   export let displayedWarnings: string[] = []
@@ -121,16 +123,16 @@
       {#if stats}
         <div class="stats-grid">
           <div>
-            <span>Format</span>
-            <strong>{stats.format.toUpperCase()}</strong>
-          </div>
-          <div>
             <span>Sequences</span>
             <strong>{stats.sequenceCount.toLocaleString()}</strong>
           </div>
           <div>
             <span>Sequence length</span>
             <strong>{stats.sequenceLength.toLocaleString()}</strong>
+          </div>
+          <div>
+            <span>Variable columns</span>
+            <strong>{(warningSummary?.variableColumns ?? 0).toLocaleString()}</strong>
           </div>
           <div>
             <span>CMAPLE effective</span>

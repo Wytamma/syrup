@@ -50,6 +50,7 @@
       fileName={app.fileName}
       error={app.error}
       stats={app.stats}
+      warningSummary={app.warningSummary}
       {getDivergence}
       effectiveStatus={app.effectiveStatus}
       displayedWarnings={app.displayedWarnings}
