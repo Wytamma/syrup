@@ -57,7 +57,7 @@
   onkeydown={handleDropzoneKeydown}
 >
   <input bind:this={dropzoneInput} type="file" accept=".fa,.fasta,.fna,.phy,.phylip,.maple,.txt" onchange={handleInput} />
-  <SyrupLogo paused={state === 'running'} />
+  <SyrupLogo paused={state !== 'idle'} />
 
   <div class="drop-content">
     <span class="drop-kicker">Pandemic scale phylogenetics in your browser</span>

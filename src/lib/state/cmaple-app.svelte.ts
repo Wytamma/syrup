@@ -13,7 +13,14 @@ import {
   parseConstantSites,
   sanitizeConstantSites,
 } from '../cmaple-settings'
-import type { AlignmentStats, AlignmentWarningSummary, CmapleWorkerResponse, ConstantSiteCounts, DivergenceSummary } from '../../types/cmaple'
+import type {
+  AlignmentStats,
+  AlignmentWarningSummary,
+  BranchSupportMethod,
+  CmapleWorkerResponse,
+  ConstantSiteCounts,
+  DivergenceSummary,
+} from '../../types/cmaple'
 
 export type AppState = 'idle' | 'preflight' | 'ready' | 'running' | 'done' | 'error'
 
@@ -24,6 +31,9 @@ export function createCmapleApp() {
   let timerId: number | null = null
   let copyFeedbackTimer: number | null = null
   let downloadFeedbackTimer: number | null = null
+  let logFlushId: number | null = null
+  let pendingLogLines: string[] = []
+  let divergenceData: DivergenceSummary | null = null
 
   const app = $state({
     state: 'idle' as AppState,
@@ -32,9 +42,10 @@ export function createCmapleApp() {
     fileName: '',
     error: '',
     stats: null as AlignmentStats | null,
-    divergence: null as DivergenceSummary | null,
+    divergenceVersion: 0,
     warningSummary: null as AlignmentWarningSummary | null,
     effective: null as boolean | null,
+    effectiveStatus: null as boolean | null,
     warnings: [] as string[],
     displayedWarnings: [] as string[],
     warningSummaryPending: false,
@@ -49,52 +60,36 @@ export function createCmapleApp() {
     isExportingMaple: false,
     numThreads: Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1)),
     maxThreads: Math.max(1, navigator.hardwareConcurrency || 1),
-    computeBranchSupport: true,
+    branchSupportMethod: 'sprta' as BranchSupportMethod,
     branchSupportReplicates: 1000,
+    branchSupportEpsilon: 0.1,
     filterDivergentSamples: false,
     maxDivergencePercent: DEFAULT_MAX_DIVERGENCE_PERCENT,
     useConstantSites: false,
     constantSites: { a: 0, c: 0, g: 0, t: 0 } as ConstantSiteCounts,
     constantSitesText: formatConstantSites(ZERO_CONSTANT_SITES),
-    didAutoDisableBranchSupportForConstantSites: false,
 
+    get divergence() {
+      app.divergenceVersion
+      return divergenceData
+    },
     get activeConstantSites() {
       return app.useConstantSites ? app.constantSites : ZERO_CONSTANT_SITES
     },
     get adjustedSequenceLength() {
       return getAdjustedSequenceLength(app.stats, app.activeConstantSites)
     },
-    get adjustedDivergence() {
-      return getAdjustedDivergence(app.divergence, app.stats, app.activeConstantSites)
-    },
-    get effectiveStatus() {
-      return getEffectiveStatus(
-        app.stats,
-        app.adjustedDivergence,
-        app.filterDivergentSamples,
-        app.maxDivergencePercent,
-        app.activeConstantSites,
-        app.effective,
-      )
-    },
-    get nextDisplayedWarnings() {
-      return getDisplayedWarnings(
-        app.stats,
-        app.filterDivergentSamples,
-        app.divergence,
-        app.warningSummary,
-        app.warnings,
-        app.maxDivergencePercent,
-        app.activeConstantSites,
-      )
-    },
-
     destroy,
     loadAlignmentFromQueryParam,
     requestWarningSummary,
+    setNumThreads,
+    setBranchSupportMethod,
+    setBranchSupportReplicates,
+    setBranchSupportEpsilon,
     setFilterDivergentSamples,
     setMaxDivergencePercent,
     setConstantSiteCountsFromText,
+    setConstantSitesText,
     setUseConstantSites,
     clearCurrent,
     loadAlignmentFromUrl,
@@ -108,18 +103,14 @@ export function createCmapleApp() {
     returnToRunSettings,
   })
 
-  $effect(() => {
-    if (
-      !app.warningSummaryPending ||
-      isCurrentWarningSummary(app.warningSummary, app.filterDivergentSamples, app.maxDivergencePercent, app.activeConstantSites)
-    ) {
-      app.displayedWarnings = app.nextDisplayedWarnings
-    }
-  })
-
   function destroy() {
     clearFeedbackTimer('copy')
     clearFeedbackTimer('download')
+    flushLogLines()
+    if (logFlushId !== null) {
+      cancelAnimationFrame(logFlushId)
+      logFlushId = null
+    }
     if (app.currentId) worker?.postMessage({ type: 'clear', id: app.currentId })
     stopTimer()
     worker?.terminate()
@@ -144,39 +135,94 @@ export function createCmapleApp() {
     })
   }
 
+  function refreshEffectiveStatus() {
+    app.effectiveStatus = getEffectiveStatus(
+      app.stats,
+      getAdjustedDivergence(app.divergence, app.stats, getActiveConstantSites()),
+      app.filterDivergentSamples,
+      app.maxDivergencePercent,
+      getActiveConstantSites(),
+      app.effective,
+    )
+  }
+
+  function refreshDisplayedWarnings() {
+    if (
+      app.warningSummaryPending &&
+      !isCurrentWarningSummary(app.warningSummary, app.filterDivergentSamples, app.maxDivergencePercent, getActiveConstantSites())
+    ) {
+      return
+    }
+
+    app.displayedWarnings = getDisplayedWarnings(
+      app.stats,
+      app.filterDivergentSamples,
+      app.divergence,
+      app.warningSummary,
+      app.warnings,
+      app.maxDivergencePercent,
+      getActiveConstantSites(),
+    )
+  }
+
+  function refreshDerivedAlignmentState() {
+    refreshEffectiveStatus()
+    refreshDisplayedWarnings()
+  }
+
+  function setDivergence(value: DivergenceSummary | null) {
+    divergenceData = value
+    app.divergenceVersion += 1
+  }
+
+  function setNumThreads(value: number) {
+    app.numThreads = Math.max(1, Math.min(app.maxThreads, Math.floor(Number(value) || 1)))
+  }
+
+  function setBranchSupportMethod(value: BranchSupportMethod) {
+    app.branchSupportMethod = value
+  }
+
+  function setBranchSupportReplicates(value: number) {
+    app.branchSupportReplicates = value
+  }
+
+  function setBranchSupportEpsilon(value: number) {
+    app.branchSupportEpsilon = value
+  }
+
   function setFilterDivergentSamples(value: boolean) {
     app.filterDivergentSamples = value
     if (!value) app.warningSummaryPending = false
+    refreshDerivedAlignmentState()
     requestWarningSummary()
   }
 
   function setMaxDivergencePercent(value: number) {
     app.maxDivergencePercent = value
     app.warningSummaryPending = false
+    refreshDerivedAlignmentState()
   }
 
   function setConstantSiteCountsFromText(value = app.constantSitesText, shouldRequestWarningSummary = true) {
     app.constantSitesText = value
     const parsedCounts = parseConstantSites(value)
     if (!parsedCounts) return
-    const hadConstantSites = getTotalConstantSites(app.constantSites) > 0
     const hasConstantSites = getTotalConstantSites(parsedCounts) > 0
     app.constantSites = parsedCounts
-    if (hasConstantSites && !hadConstantSites) app.useConstantSites = true
-    if (app.useConstantSites && hasConstantSites && !hadConstantSites && !app.didAutoDisableBranchSupportForConstantSites) {
-      app.computeBranchSupport = false
-      app.didAutoDisableBranchSupportForConstantSites = true
-    }
+    if (hasConstantSites) app.useConstantSites = true
+    refreshDerivedAlignmentState()
     if (shouldRequestWarningSummary && app.filterDivergentSamples) requestWarningSummary()
+  }
+
+  function setConstantSitesText(value: string) {
+    app.constantSitesText = value
   }
 
   function setUseConstantSites(value: boolean) {
     setConstantSiteCountsFromText(app.constantSitesText, false)
     app.useConstantSites = value
-    if (value && getTotalConstantSites(app.constantSites) > 0 && !app.didAutoDisableBranchSupportForConstantSites) {
-      app.computeBranchSupport = false
-      app.didAutoDisableBranchSupportForConstantSites = true
-    }
+    refreshDerivedAlignmentState()
     if (app.filterDivergentSamples) requestWarningSummary()
   }
 
@@ -189,15 +235,16 @@ export function createCmapleApp() {
     app.fileName = ''
     app.error = ''
     app.stats = null
-    app.divergence = null
+    setDivergence(null)
     app.warningSummary = null
     app.warningSummaryPending = false
     app.effective = null
+    app.effectiveStatus = null
     app.warnings = []
+    app.displayedWarnings = []
     app.useConstantSites = false
     app.constantSites = { a: 0, c: 0, g: 0, t: 0 }
     app.constantSitesText = formatConstantSites(app.constantSites)
-    app.didAutoDisableBranchSupportForConstantSites = false
     app.logs = []
     app.newick = ''
     app.logLikelihood = null
@@ -208,6 +255,11 @@ export function createCmapleApp() {
     app.isExportingMaple = false
     clearFeedbackTimer('copy')
     clearFeedbackTimer('download')
+    pendingLogLines = []
+    if (logFlushId !== null) {
+      cancelAnimationFrame(logFlushId)
+      logFlushId = null
+    }
     app.elapsedMs = 0
     stopTimer()
     app.state = 'idle'
@@ -250,16 +302,22 @@ export function createCmapleApp() {
     app.fileName = file.name
     app.error = ''
     app.stats = null
-    app.divergence = null
+    setDivergence(null)
     app.warningSummary = null
     app.warningSummaryPending = false
     app.effective = null
+    app.effectiveStatus = null
     app.warnings = []
+    app.displayedWarnings = []
     app.useConstantSites = false
     app.constantSites = { a: 0, c: 0, g: 0, t: 0 }
     app.constantSitesText = formatConstantSites(app.constantSites)
-    app.didAutoDisableBranchSupportForConstantSites = false
     app.logs = []
+    pendingLogLines = []
+    if (logFlushId !== null) {
+      cancelAnimationFrame(logFlushId)
+      logFlushId = null
+    }
     app.newick = ''
     app.logLikelihood = null
     app.state = 'preflight'
@@ -287,17 +345,24 @@ export function createCmapleApp() {
   function runInference() {
     if (!app.currentId || app.state !== 'ready') return
     app.branchSupportReplicates = Math.max(1, Math.floor(Number(app.branchSupportReplicates) || 1000))
+    app.branchSupportEpsilon = Math.max(0, Number(app.branchSupportEpsilon) || 0.1)
     app.maxDivergencePercent = Math.max(0, Number(app.maxDivergencePercent) || DEFAULT_MAX_DIVERGENCE_PERCENT)
     app.error = ''
     app.logs = []
+    pendingLogLines = []
+    if (logFlushId !== null) {
+      cancelAnimationFrame(logFlushId)
+      logFlushId = null
+    }
     startTimer()
     app.state = 'running'
     getWorker().postMessage({
       type: 'infer',
       id: app.currentId,
       numThreads: app.numThreads,
-      computeBranchSupport: app.computeBranchSupport,
+      branchSupportMethod: app.branchSupportMethod,
       branchSupportReplicates: app.branchSupportReplicates,
+      branchSupportEpsilon: app.branchSupportEpsilon,
       filterDivergentSamples: app.filterDivergentSamples,
       maxDivergencePercent: app.maxDivergencePercent,
       constantSites: sanitizeConstantSites(app.activeConstantSites),
@@ -345,6 +410,11 @@ export function createCmapleApp() {
     if (!app.currentId || !app.stats) return
     app.error = ''
     app.logs = []
+    pendingLogLines = []
+    if (logFlushId !== null) {
+      cancelAnimationFrame(logFlushId)
+      logFlushId = null
+    }
     app.elapsedMs = 0
     stopTimer()
     app.state = 'ready'
@@ -373,6 +443,22 @@ export function createCmapleApp() {
       window.clearInterval(timerId)
       timerId = null
     }
+  }
+
+  function queueLogLines(lines: string[]) {
+    pendingLogLines.push(...lines)
+    if (logFlushId !== null) return
+
+    logFlushId = requestAnimationFrame(() => {
+      logFlushId = null
+      flushLogLines()
+    })
+  }
+
+  function flushLogLines() {
+    if (!pendingLogLines.length) return
+    app.logs = [...app.logs, ...pendingLogLines].slice(-220)
+    pendingLogLines = []
   }
 
   function startTimer() {
@@ -430,7 +516,7 @@ export function createCmapleApp() {
           .map((line) => line.trim())
           .filter(Boolean)
 
-        if (lines.length) app.logs = [...app.logs, ...lines].slice(-220)
+        if (lines.length) queueLogLines(lines)
         return
       }
 
@@ -445,7 +531,7 @@ export function createCmapleApp() {
 
       if (message.type === 'preflight') {
         app.stats = message.stats
-        app.divergence = message.divergence
+        setDivergence(message.divergence)
         app.warningSummary = message.warningSummary
         app.warningSummaryPending = false
         app.maxDivergencePercent = DEFAULT_MAX_DIVERGENCE_PERCENT
@@ -453,6 +539,7 @@ export function createCmapleApp() {
         app.warnings = message.warnings
         app.numThreads = getDefaultThreadCount(message.warningSummary, app.maxThreads)
         app.error = ''
+        refreshDerivedAlignmentState()
         stopTimer()
         app.state = 'ready'
         return
@@ -467,6 +554,7 @@ export function createCmapleApp() {
         ) {
           app.warningSummary = summary
           app.warningSummaryPending = false
+          refreshDerivedAlignmentState()
         }
         return
       }
@@ -485,9 +573,11 @@ export function createCmapleApp() {
       }
 
       app.error = ''
+      flushLogLines()
       app.newick = message.newick
       app.logLikelihood = message.logLikelihood
       app.effective = message.effective
+      app.effectiveStatus = message.effective
       app.warnings = message.warnings
       stopTimer()
       app.state = 'done'

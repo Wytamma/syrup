@@ -648,6 +648,86 @@ h1 {
   width: 100%;
 }
 
+.branch-support-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.branch-support-controls {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.branch-support-radios {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: fit-content;
+}
+
+.branch-support-radios label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  width: fit-content;
+  padding: 0 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.branch-support-radios label:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--text);
+}
+
+.branch-support-radios input[type='radio'] {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.branch-support-radios label:has(input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.branch-support-alrt-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.branch-support-alrt-options label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  min-width: 0;
+}
+
+.branch-support-alrt-options span {
+  color: var(--subtle);
+  font-size: 0.72rem;
+}
+
+.branch-support-alrt-options input[type='number'] {
+  width: 100%;
+}
+
 .option-note {
   color: var(--subtle);
   font-size: 0.78rem;

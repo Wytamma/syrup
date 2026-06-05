@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { afterUpdate } from 'svelte'
+  import { onDestroy, tick } from 'svelte'
   import type { DivergenceSummary } from '../../types/cmaple'
 
   export let divergence: DivergenceSummary | null = null
@@ -16,6 +16,8 @@
   let track: HTMLSpanElement | null = null
   let draftThreshold = threshold
   let isAdjustingThreshold = false
+  let drawFrame: number | null = null
+  let lastDrawKey = ''
 
   $: if (!isAdjustingThreshold && threshold !== draftThreshold) draftThreshold = threshold
   $: sliderMax = Math.max(10, Math.ceil(Math.max(divergence?.maxScore ?? 0, draftThreshold)))
@@ -23,8 +25,21 @@
   $: sampleScores = divergence?.sampleScores ?? []
   $: includedSampleCount = countIncludedSamples(sampleScores, enabled, draftThreshold)
   $: removedSampleCount = Math.max(0, sampleScores.length - includedSampleCount)
+  $: scheduleCanvasDraw(
+    [
+      sampleScores,
+      sampleScores.length,
+      divergence?.maxScore ?? 0,
+      enabled,
+      thresholdPosition,
+      sliderMax,
+      disabled,
+    ],
+  )
 
-  afterUpdate(drawCanvas)
+  onDestroy(() => {
+    if (drawFrame !== null) cancelAnimationFrame(drawFrame)
+  })
 
   function formatPercent(value: number) {
     return `${value.toFixed(value >= 10 ? 0 : 1)}%`
@@ -181,6 +196,25 @@
         enabled && markerX - MARKER_RADIUS - MARKER_STROKE_WIDTH / 2 > thresholdX,
         colors,
       )
+    })
+  }
+
+  function scheduleCanvasDraw(dependencies: unknown[]) {
+    const drawKey = dependencies
+      .map((dependency) => {
+        if (Array.isArray(dependency)) return `${dependency.length}:${dependency[0] ?? ''}:${dependency.at(-1) ?? ''}`
+        return String(dependency)
+      })
+      .join('|')
+
+    if (drawKey === lastDrawKey) return
+    lastDrawKey = drawKey
+
+    if (drawFrame !== null) cancelAnimationFrame(drawFrame)
+    drawFrame = requestAnimationFrame(async () => {
+      drawFrame = null
+      await tick()
+      drawCanvas()
     })
   }
 </script>

@@ -1,30 +1,73 @@
 <script lang="ts">
   import { afterUpdate } from 'svelte'
   import { formatElapsed, formatFileSize } from '../cmaple-settings'
-  import type { CmapleAppController } from '../state/cmaple-app.svelte'
+  import type {
+    AlignmentStats,
+    BranchSupportMethod,
+    ConstantSiteCounts,
+    DivergenceSummary,
+  } from '../../types/cmaple'
+  import type { AppState } from '../state/cmaple-app.svelte'
   import BranchSupportOption from './BranchSupportOption.svelte'
   import ConstantSitesOption from './ConstantSitesOption.svelte'
   import DivergenceQualityFilter from './DivergenceQualityFilter.svelte'
   import ThreadOption from './ThreadOption.svelte'
 
-  export let app: CmapleAppController
+  export let state: AppState
+  export let selectedFile: File | null = null
+  export let fileName = ''
+  export let error = ''
+  export let stats: AlignmentStats | null = null
+  export let getDivergence: () => DivergenceSummary | null = () => null
+  export let effectiveStatus: boolean | null = null
+  export let displayedWarnings: string[] = []
+  export let logs: string[] = []
+  export let elapsedMs = 0
+  export let isExportingMaple = false
+  export let numThreads = 1
+  export let maxThreads = 1
+  export let branchSupportMethod: BranchSupportMethod = 'sprta'
+  export let branchSupportReplicates = 1000
+  export let branchSupportEpsilon = 0.1
+  export let filterDivergentSamples = false
+  export let maxDivergencePercent = 6.7
+  export let useConstantSites = false
+  export let constantSites: ConstantSiteCounts = { a: 0, c: 0, g: 0, t: 0 }
+  export let constantSitesText = ''
+  export let activeConstantSites: ConstantSiteCounts = { a: 0, c: 0, g: 0, t: 0 }
+  export let adjustedSequenceLength = 0
   export let crossOriginIsolated = false
   export let onChooseAnother: () => void = () => {}
+  export let onClearCurrent: () => void = () => {}
+  export let onDownloadMaple: () => void = () => {}
+  export let onRunInference: () => void = () => {}
+  export let onNumThreadsChange: (value: number) => void = () => {}
+  export let onBranchSupportMethodChange: (value: BranchSupportMethod) => void = () => {}
+  export let onBranchSupportReplicatesChange: (value: number) => void = () => {}
+  export let onBranchSupportEpsilonChange: (value: number) => void = () => {}
+  export let onConstantSiteTextChange: (value: string, shouldRequestWarningSummary?: boolean) => void = () => {}
+  export let onConstantSiteTextCommit: (value: string) => void = () => {}
+  export let onFormattedConstantSiteTextChange: (value: string) => void = () => {}
+  export let onUseConstantSitesChange: (enabled: boolean) => void = () => {}
+  export let onFilterDivergentSamplesChange: (enabled: boolean) => void = () => {}
+  export let onMaxDivergencePercentChange: (value: number) => void = () => {}
 
   let logLinesElement: HTMLDivElement | null = null
   let lastScrolledLogCount = 0
   let advancedOptionsElement: HTMLDetailsElement | null = null
+  let advancedOptionsOpen = false
 
   afterUpdate(() => {
-    if (app.state === 'running' && app.logs.length !== lastScrolledLogCount && logLinesElement) {
+    if (state === 'running' && logs.length !== lastScrolledLogCount && logLinesElement) {
       logLinesElement.scrollTop = logLinesElement.scrollHeight
     }
-    lastScrolledLogCount = app.logs.length
+    lastScrolledLogCount = logs.length
   })
 
   function runInference() {
+    advancedOptionsOpen = false
     if (advancedOptionsElement) advancedOptionsElement.open = false
-    app.runInference()
+    onRunInference()
   }
 </script>
 
@@ -34,131 +77,135 @@
       <div>
         <p class="eyebrow">SYRUP (CMAPLE in the browser)</p>
         <h1 id="modal-title">
-          {app.state === 'preflight' ? 'Analyzing alignment' : app.state === 'running' ? 'Running analysis' : 'Alignment ready'}
+          {state === 'preflight' ? 'Analyzing alignment' : state === 'running' ? 'Running analysis' : 'Alignment ready'}
         </h1>
       </div>
-      {#if app.state !== 'running'}
-        <button type="button" class="ghost" onclick={app.clearCurrent}>Close</button>
+      {#if state !== 'running'}
+        <button type="button" class="ghost" onclick={onClearCurrent}>Close</button>
       {/if}
     </div>
 
     <div class="file-line">
       <div class="file-details">
-        <strong>{app.fileName}</strong>
-        {#if app.state !== 'preflight' && app.state !== 'running'}
+        <strong>{fileName}</strong>
+        {#if state !== 'preflight' && state !== 'running'}
           <a
             href="/"
             class="text-link"
-            aria-disabled={app.isExportingMaple}
+            aria-disabled={isExportingMaple}
             onclick={(event) => {
               event.preventDefault()
-              if (!app.isExportingMaple) app.downloadMaple()
+              if (!isExportingMaple) onDownloadMaple()
             }}
           >
-            {app.isExportingMaple ? 'Preparing MAPLE...' : 'Download MAPLE format'}
+            {isExportingMaple ? 'Preparing MAPLE...' : 'Download MAPLE format'}
           </a>
         {/if}
       </div>
-      {#if app.selectedFile}
-        <span class="file-size">{formatFileSize(app.selectedFile.size)}</span>
+      {#if selectedFile}
+        <span class="file-size">{formatFileSize(selectedFile.size)}</span>
       {/if}
     </div>
 
-    {#if app.state === 'preflight'}
+    {#if state === 'preflight'}
       <div class="loading">
         <span>Parsing alignment and checking CMAPLE effectiveness.</span>
-        <strong aria-live="polite">{formatElapsed(app.elapsedMs)}</strong>
+        <strong aria-live="polite">{formatElapsed(elapsedMs)}</strong>
       </div>
-    {:else if app.state === 'error'}
-      <div class="error" role="alert">{app.error}</div>
+    {:else if state === 'error'}
+      <div class="error" role="alert">{error}</div>
       <div class="modal-actions">
         <button type="button" onclick={onChooseAnother}>Choose another file</button>
       </div>
     {:else}
-      {#if app.stats}
+      {#if stats}
         <div class="stats-grid">
           <div>
             <span>Format</span>
-            <strong>{app.stats.format.toUpperCase()}</strong>
+            <strong>{stats.format.toUpperCase()}</strong>
           </div>
           <div>
             <span>Sequences</span>
-            <strong>{app.stats.sequenceCount.toLocaleString()}</strong>
+            <strong>{stats.sequenceCount.toLocaleString()}</strong>
           </div>
           <div>
             <span>Sequence length</span>
-            <strong>{app.stats.sequenceLength.toLocaleString()}</strong>
+            <strong>{stats.sequenceLength.toLocaleString()}</strong>
           </div>
           <div>
             <span>CMAPLE effective</span>
-            <strong>{app.effectiveStatus ? 'Yes' : 'No'}</strong>
+            <strong>{effectiveStatus ? 'Yes' : 'No'}</strong>
           </div>
         </div>
       {/if}
 
-      {#if app.error}
-        <div class="error" role="alert">{app.error}</div>
+      {#if error}
+        <div class="error" role="alert">{error}</div>
       {/if}
 
-      {#if app.effectiveStatus === false}
+      {#if effectiveStatus === false}
         <div class="warning" role="alert">
           This data is likely not suitable for analysis with CMAPLE.
         </div>
       {/if}
 
-      {#if app.displayedWarnings.length}
-        <div class="warning">{app.displayedWarnings.join(' ')}</div>
+      {#if displayedWarnings.length}
+        <div class="warning">{displayedWarnings.join(' ')}</div>
       {/if}
 
       <div class="options">
         <ThreadOption
-          value={app.numThreads}
-          max={app.maxThreads}
-          disabled={app.state === 'running' || !crossOriginIsolated}
-          onChange={(value) => (app.numThreads = value)}
+          value={numThreads}
+          max={maxThreads}
+          disabled={state === 'running' || !crossOriginIsolated}
+          onChange={onNumThreadsChange}
         />
       </div>
 
-      <details bind:this={advancedOptionsElement} class="advanced-options">
+      <details bind:this={advancedOptionsElement} bind:open={advancedOptionsOpen} class="advanced-options">
         <summary>Advanced Options</summary>
-        <div class="options">
-          <BranchSupportOption
-            replicates={app.branchSupportReplicates}
-            enabled={app.computeBranchSupport}
-            disabled={app.state === 'running'}
-            onReplicatesChange={(value) => (app.branchSupportReplicates = value)}
-            onEnabledChange={(value) => (app.computeBranchSupport = value)}
-          />
-          <ConstantSitesOption
-            text={app.constantSitesText}
-            constantSites={app.constantSites}
-            activeConstantSites={app.activeConstantSites}
-            adjustedSequenceLength={app.adjustedSequenceLength}
-            hasStats={!!app.stats}
-            enabled={app.useConstantSites}
-            disabled={app.state === 'running'}
-            onTextChange={app.setConstantSiteCountsFromText}
-            onTextCommit={(value) => app.setConstantSiteCountsFromText(value)}
-            onFormattedTextChange={(value) => (app.constantSitesText = value)}
-            onEnabledChange={app.setUseConstantSites}
-          />
-          <DivergenceQualityFilter
-            divergence={app.divergence}
-            enabled={app.filterDivergentSamples}
-            threshold={app.maxDivergencePercent}
-            onEnabledChange={app.setFilterDivergentSamples}
-            onThresholdChange={app.setMaxDivergencePercent}
-            disabled={app.state === 'running'}
-          />
-        </div>
+        {#if advancedOptionsOpen}
+          <div class="options">
+            <BranchSupportOption
+              method={branchSupportMethod}
+              replicates={branchSupportReplicates}
+              epsilon={branchSupportEpsilon}
+              disabled={state === 'running'}
+              onMethodChange={onBranchSupportMethodChange}
+              onReplicatesChange={onBranchSupportReplicatesChange}
+              onEpsilonChange={onBranchSupportEpsilonChange}
+            />
+            <ConstantSitesOption
+              text={constantSitesText}
+              {constantSites}
+              {activeConstantSites}
+              {adjustedSequenceLength}
+              hasStats={!!stats}
+              enabled={useConstantSites}
+              disabled={state === 'running'}
+              onTextChange={onConstantSiteTextChange}
+              onTextCommit={onConstantSiteTextCommit}
+              onFormattedTextChange={onFormattedConstantSiteTextChange}
+              onEnabledChange={onUseConstantSitesChange}
+            />
+            <DivergenceQualityFilter
+              divergence={getDivergence()}
+              enabled={filterDivergentSamples}
+              threshold={maxDivergencePercent}
+              onEnabledChange={onFilterDivergentSamplesChange}
+              onThresholdChange={onMaxDivergencePercentChange}
+              disabled={state === 'running'}
+            />
+          </div>
+        {/if}
       </details>
 
-      {#if app.state === 'running' || app.logs.length}
+      {#if state === 'running' || logs.length}
         <div class="log-panel" aria-live="polite">
           <div class="log-title">Run log</div>
           <div class="log-lines" bind:this={logLinesElement}>
-            {#if app.logs.length}
-              {#each app.logs as line}
+            {#if logs.length}
+              {#each logs as line}
                 <div>{line}</div>
               {/each}
             {:else}
@@ -169,13 +216,13 @@
       {/if}
 
       <div class="modal-actions">
-        {#if app.state !== 'running'}
+        {#if state !== 'running'}
           <button type="button" class="ghost" onclick={onChooseAnother}>Choose another</button>
         {/if}
-        {#if app.state === 'running'}
-          <span class="run-timer" aria-live="polite">{formatElapsed(app.elapsedMs)}</span>
+        {#if state === 'running'}
+          <span class="run-timer" aria-live="polite">{formatElapsed(elapsedMs)}</span>
         {/if}
-        <button type="button" class="primary-button" onclick={runInference} disabled={app.state !== 'ready'}>Run</button>
+        <button type="button" class="primary-button" onclick={runInference} disabled={state !== 'ready'}>Run</button>
       </div>
     {/if}
   </div>

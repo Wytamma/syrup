@@ -18,8 +18,9 @@ type EmscriptenModule = {
     size: number,
     format: number,
     numThreads: number,
-    computeBranchSupport: number,
+    branchSupportMethod: number,
     branchSupportReplicates: number,
+    branchSupportEpsilon: number,
     filterDivergentSamples: number,
     maxDivergencePercent: number,
     constantA: number,
@@ -30,8 +31,9 @@ type EmscriptenModule = {
   _cmaple_infer_loaded: (
     handle: number,
     numThreads: number,
-    computeBranchSupport: number,
+    branchSupportMethod: number,
     branchSupportReplicates: number,
+    branchSupportEpsilon: number,
     filterDivergentSamples: number,
     maxDivergencePercent: number,
     constantA: number,
@@ -83,6 +85,12 @@ const formatIds = {
   maple: 3,
 } as const
 
+const branchSupportMethodIds = {
+  none: 0,
+  sprta: 1,
+  'sh-alrt': 2,
+} as const
+
 function post(response: CmapleWorkerResponse) {
   if (response.type === 'log') {
     const logger = response.stream === 'stderr' ? console.warn : console.info
@@ -125,7 +133,7 @@ function readCStringFromBytes(bytes: Uint8Array, ptr: number) {
 function getLikelyLongRunWarning(summary: AlignmentWarningSummary) {
   const largeAlignmentWarning =
     summary.sequenceCount * summary.sequenceLength >= 50_000_000
-      ? 'This is a large alignment and may take several minutes in the browser, especially with SH-aLRT support enabled.'
+      ? 'This is a large alignment and may take several minutes in the browser, especially with branch support enabled.'
       : ''
 
   const variableColumnsPerKb = summary.sequenceLength ? summary.variableColumns / (summary.sequenceLength / 1000) : 0
@@ -140,9 +148,9 @@ function getLikelyLongRunWarning(summary: AlignmentWarningSummary) {
     ].filter(Boolean)
 
     return [
-      largeAlignmentWarning || 'This alignment may take several minutes in the browser, especially with SH-aLRT support enabled.',
+      largeAlignmentWarning || 'This alignment may take several minutes in the browser, especially with branch support enabled.',
       details.length ? `It has ${details.join(' and ')}.` : '',
-      'Consider turning off SH-aLRT support or lowering the number of replicates for a faster less robust analysis.',
+      'Consider turning off branch support for a faster less robust analysis.',
     ].filter(Boolean).join(' ')
   }
 
@@ -391,8 +399,9 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         `sequenceLength=${stored.stats?.sequenceLength ?? 'unknown'}`,
         `effective=${stored.effective ?? 'unknown'}`,
         `requestedThreads=${message.numThreads}`,
-        `branchSupport=${message.computeBranchSupport}`,
+        `branchSupportMethod=${message.branchSupportMethod}`,
         `branchSupportReplicates=${message.branchSupportReplicates}`,
+        `branchSupportEpsilon=${message.branchSupportEpsilon}`,
         `divergenceFilter=${message.filterDivergentSamples}`,
         `maxDivergencePercent=${message.maxDivergencePercent}`,
         `constantSites=${Object.values(constantSites).join(',')}`,
@@ -406,8 +415,9 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
     const resultPtr = module._cmaple_infer_loaded(
       stored.wasmHandle,
       message.numThreads,
-      message.computeBranchSupport ? 1 : 0,
+      branchSupportMethodIds[message.branchSupportMethod],
       message.branchSupportReplicates,
+      message.branchSupportEpsilon,
       message.filterDivergentSamples ? 1 : 0,
       message.maxDivergencePercent,
       constantSites.a,

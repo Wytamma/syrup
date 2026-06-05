@@ -1,6 +1,7 @@
 #include "../../vendor/cmaple/maple/cmaple.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -23,6 +24,12 @@ enum AlignmentFormat {
   FORMAT_FASTA = 1,
   FORMAT_PHYLIP = 2,
   FORMAT_MAPLE = 3,
+};
+
+enum BranchSupportMethod {
+  BRANCH_SUPPORT_NONE = 0,
+  BRANCH_SUPPORT_SPRTA = 1,
+  BRANCH_SUPPORT_SH_ALRT = 2,
 };
 
 struct LoadedAlignment {
@@ -607,10 +614,123 @@ std::string resultJson(const std::string& newick,
   return out.str();
 }
 
+std::string extractSprtaValue(const std::string& comment) {
+  std::size_t pos = 0;
+  while ((pos = comment.find("sprta=", pos)) != std::string::npos) {
+    if (pos >= 6 && comment.substr(pos - 6, 6) == "input_") {
+      pos += 6;
+      continue;
+    }
+
+    std::size_t value_start = pos + 6;
+    std::size_t value_end = value_start;
+    while (value_end < comment.size() &&
+           comment[value_end] != ',' &&
+           comment[value_end] != ']' &&
+           comment[value_end] != '}') {
+      ++value_end;
+    }
+    return comment.substr(value_start, value_end - value_start);
+  }
+
+  return "";
+}
+
+bool hasSuffix(const std::string& value, const std::string& suffix) {
+  return value.size() >= suffix.size() &&
+         value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+bool isGeneratedInternalName(const std::string& label) {
+  if (hasSuffix(label, "_MinorSeqsClade")) return true;
+  if (label.size() < 2 || label[0] != 'i' || label[1] != 'n') return false;
+  return std::all_of(label.begin() + 2, label.end(), [](unsigned char ch) {
+    return std::isdigit(ch) != 0;
+  });
+}
+
+std::string extractTreeFromNexus(const std::string& nexus) {
+  const std::string marker = "tree TREE1 = [&R] ";
+  std::size_t start = nexus.find(marker);
+  if (start == std::string::npos) return "";
+  start += marker.size();
+
+  std::size_t end = nexus.find('\n', start);
+  if (end == std::string::npos) end = nexus.size();
+
+  return nexus.substr(start, end - start);
+}
+
+std::string sprtaNexusToSupportNewick(const std::string& nexus) {
+  std::string tree = extractTreeFromNexus(nexus);
+  if (tree.empty()) return "";
+
+  std::size_t comment_start = 0;
+  while ((comment_start = tree.find("[&", comment_start)) != std::string::npos) {
+    std::size_t comment_end = tree.find(']', comment_start);
+    if (comment_end == std::string::npos) break;
+
+    const std::string comment =
+        tree.substr(comment_start, comment_end - comment_start + 1);
+    const std::string sprta = extractSprtaValue(comment);
+
+    std::size_t colon = tree.rfind(':', comment_start);
+    std::size_t label_start = std::string::npos;
+    if (colon != std::string::npos) {
+      const std::size_t delimiter = tree.find_last_of("(,)", colon);
+      label_start = delimiter == std::string::npos ? 0 : delimiter + 1;
+    }
+
+    if (!sprta.empty() && colon != std::string::npos &&
+        label_start != std::string::npos) {
+      const std::string label = tree.substr(label_start, colon - label_start);
+      if (isGeneratedInternalName(label)) {
+        tree.replace(label_start, colon - label_start, sprta);
+        const std::ptrdiff_t label_delta =
+            static_cast<std::ptrdiff_t>(sprta.size()) -
+            static_cast<std::ptrdiff_t>(label.size());
+        comment_start = static_cast<std::size_t>(
+            static_cast<std::ptrdiff_t>(comment_start) + label_delta);
+        comment_end = static_cast<std::size_t>(
+            static_cast<std::ptrdiff_t>(comment_end) + label_delta);
+      }
+    }
+
+    tree.erase(comment_start, comment_end - comment_start + 1);
+  }
+
+  std::size_t search_from = 0;
+  while ((search_from = tree.find(')', search_from)) != std::string::npos) {
+    const std::size_t label_start = search_from + 1;
+    std::size_t label_end = label_start;
+    while (label_end < tree.size() &&
+           tree[label_end] != ':' &&
+           tree[label_end] != ',' &&
+           tree[label_end] != ')' &&
+           tree[label_end] != ';') {
+      ++label_end;
+    }
+
+    if (label_end < tree.size() && tree[label_end] == ':') {
+      const std::string label = tree.substr(label_start, label_end - label_start);
+      if (isGeneratedInternalName(label)) {
+        tree.erase(label_start, label_end - label_start);
+        search_from = label_start;
+        continue;
+      }
+    }
+
+    search_from = label_end;
+  }
+
+  return tree;
+}
+
 std::string inferAlignment(cmaple::Alignment& alignment,
                            int num_threads,
-                           int compute_branch_support,
+                           int branch_support_method,
                            int branch_support_replicates,
+                           double branch_support_epsilon,
                            int filter_divergent_samples,
                            double max_divergence_percent,
                            const ConstantSiteCounts& constant_sites) {
@@ -649,14 +769,40 @@ std::string inferAlignment(cmaple::Alignment& alignment,
   const bool effective = cmaple::isEffective(alignment);
   cmaple::Model model(cmaple::ModelBase::GTR, cmaple::SeqRegion::SEQ_DNA);
   cmaple::Tree tree(&alignment, &model);
+  if (branch_support_method != BRANCH_SUPPORT_NONE &&
+      branch_support_method != BRANCH_SUPPORT_SPRTA &&
+      branch_support_method != BRANCH_SUPPORT_SH_ALRT) {
+    branch_support_method = BRANCH_SUPPORT_NONE;
+  }
+  const bool compute_sprta = branch_support_method == BRANCH_SUPPORT_SPRTA;
+  if (compute_sprta && tree.params) {
+    tree.params->compute_SPRTA_zero_length_branches = true;
+    tree.params->print_SPRTA_less_info_seqs = true;
+  }
+  if (branch_support_method == BRANCH_SUPPORT_SPRTA) {
+    std::cout << "Branch support: SPRTA" << std::endl;
+  } else if (branch_support_method == BRANCH_SUPPORT_SH_ALRT) {
+    std::cout << "Branch support: SH-aLRT ("
+              << branch_support_replicates << " replicates, epsilon "
+              << branch_support_epsilon << ")" << std::endl;
+  } else {
+    std::cout << "Branch support: off" << std::endl;
+  }
 
   double phase_started_ms = nowMs();
-  tree.infer(num_threads, cmaple::Tree::NORMAL_TREE_SEARCH, false, false);
+  if (compute_sprta) {
+    std::cout << "Computing SPRTA supports" << std::endl;
+  }
+  tree.infer(num_threads,
+             compute_sprta ? cmaple::Tree::EXHAUSTIVE_TREE_SEARCH
+                            : cmaple::Tree::NORMAL_TREE_SEARCH,
+             false,
+             compute_sprta);
   profileLog("treeInfer", nowMs() - phase_started_ms);
 
-  if (compute_branch_support && branch_support_replicates > 0) {
+  if (!compute_sprta && branch_support_method == BRANCH_SUPPORT_SH_ALRT && branch_support_replicates > 0) {
     phase_started_ms = nowMs();
-    tree.computeBranchSupport(num_threads, branch_support_replicates);
+    tree.computeBranchSupport(num_threads, branch_support_replicates, branch_support_epsilon);
     profileLog("branchSupport", nowMs() - phase_started_ms);
   }
 
@@ -665,8 +811,17 @@ std::string inferAlignment(cmaple::Alignment& alignment,
   profileLog("computeLh", nowMs() - phase_started_ms);
 
   phase_started_ms = nowMs();
-  const std::string newick =
-      tree.exportNewick(cmaple::Tree::BIN_TREE, false, true);
+  std::string newick;
+  if (compute_sprta) {
+    const std::string nexus =
+        tree.exportNexus(cmaple::Tree::BIN_TREE, true, false);
+    newick = sprtaNexusToSupportNewick(nexus);
+    if (newick.empty()) {
+      newick = tree.exportNewick(cmaple::Tree::BIN_TREE, false, true);
+    }
+  } else {
+    newick = tree.exportNewick(cmaple::Tree::BIN_TREE, false, true);
+  }
   profileLog("exportNewick", nowMs() - phase_started_ms);
 
   return resultJson(newick, log_likelihood, effective, removed_samples);
@@ -798,8 +953,9 @@ extern "C" char* cmaple_infer(const unsigned char* data,
                                unsigned int size,
                                int format,
                                int num_threads,
-                               int compute_branch_support,
+                               int branch_support_method,
                                int branch_support_replicates,
+                               double branch_support_epsilon,
                                int filter_divergent_samples,
                                double max_divergence_percent,
                                unsigned int constant_a,
@@ -821,8 +977,9 @@ extern "C" char* cmaple_infer(const unsigned char* data,
         constant_a, constant_c, constant_g, constant_t};
     return copyResult(inferAlignment(*alignment,
                                      num_threads,
-                                     compute_branch_support,
+                                     branch_support_method,
                                      branch_support_replicates,
+                                     branch_support_epsilon,
                                      filter_divergent_samples,
                                      max_divergence_percent,
                                      constant_sites));
@@ -862,8 +1019,9 @@ extern "C" char* cmaple_analyze(const unsigned char* data,
 
 extern "C" char* cmaple_infer_loaded(unsigned int handle,
                                       int num_threads,
-                                      int compute_branch_support,
+                                      int branch_support_method,
                                       int branch_support_replicates,
+                                      double branch_support_epsilon,
                                       int filter_divergent_samples,
                                       double max_divergence_percent,
                                       unsigned int constant_a,
@@ -886,8 +1044,9 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle,
         constant_a, constant_c, constant_g, constant_t};
     return copyResult(inferAlignment(alignment,
                                      num_threads,
-                                     compute_branch_support,
+                                     branch_support_method,
                                      branch_support_replicates,
+                                     branch_support_epsilon,
                                      filter_divergent_samples,
                                      max_divergence_percent,
                                      constant_sites));

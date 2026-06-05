@@ -1,4 +1,5 @@
 export type AlignmentFormat = 'auto' | 'fasta' | 'phylip' | 'maple'
+export type BranchSupportMethod = 'none' | 'sprta' | 'sh-alrt'
 
 export type AlignmentStats = {
   fileName: string
@@ -52,8 +53,9 @@ export type CmapleWorkerRequest =
       type: 'infer'
       id: string
       numThreads: number
-      computeBranchSupport: boolean
+      branchSupportMethod: BranchSupportMethod
       branchSupportReplicates: number
+      branchSupportEpsilon: number
       filterDivergentSamples: boolean
       maxDivergencePercent: number
       constantSites: ConstantSiteCounts

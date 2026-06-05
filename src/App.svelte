@@ -16,6 +16,10 @@
     landingDropzone?.openFilePicker()
   }
 
+  function getDivergence() {
+    return app.divergence
+  }
+
   onMount(() => {
     theme.mount()
     app.loadAlignmentFromQueryParam()
@@ -40,6 +44,45 @@
   {/if}
 
   {#if app.state === 'preflight' || app.state === 'ready' || app.state === 'running' || app.state === 'error'}
-    <RunModal {app} crossOriginIsolated={globalThis.crossOriginIsolated} onChooseAnother={openFilePicker} />
+    <RunModal
+      state={app.state}
+      selectedFile={app.selectedFile}
+      fileName={app.fileName}
+      error={app.error}
+      stats={app.stats}
+      {getDivergence}
+      effectiveStatus={app.effectiveStatus}
+      displayedWarnings={app.displayedWarnings}
+      logs={app.logs}
+      elapsedMs={app.elapsedMs}
+      isExportingMaple={app.isExportingMaple}
+      numThreads={app.numThreads}
+      maxThreads={app.maxThreads}
+      branchSupportMethod={app.branchSupportMethod}
+      branchSupportReplicates={app.branchSupportReplicates}
+      branchSupportEpsilon={app.branchSupportEpsilon}
+      filterDivergentSamples={app.filterDivergentSamples}
+      maxDivergencePercent={app.maxDivergencePercent}
+      useConstantSites={app.useConstantSites}
+      constantSites={app.constantSites}
+      constantSitesText={app.constantSitesText}
+      activeConstantSites={app.activeConstantSites}
+      adjustedSequenceLength={app.adjustedSequenceLength}
+      crossOriginIsolated={globalThis.crossOriginIsolated}
+      onChooseAnother={openFilePicker}
+      onClearCurrent={app.clearCurrent}
+      onDownloadMaple={app.downloadMaple}
+      onRunInference={app.runInference}
+      onNumThreadsChange={app.setNumThreads}
+      onBranchSupportMethodChange={app.setBranchSupportMethod}
+      onBranchSupportReplicatesChange={app.setBranchSupportReplicates}
+      onBranchSupportEpsilonChange={app.setBranchSupportEpsilon}
+      onConstantSiteTextChange={app.setConstantSiteCountsFromText}
+      onConstantSiteTextCommit={app.setConstantSiteCountsFromText}
+      onFormattedConstantSiteTextChange={app.setConstantSitesText}
+      onUseConstantSitesChange={app.setUseConstantSites}
+      onFilterDivergentSamplesChange={app.setFilterDivergentSamples}
+      onMaxDivergencePercentChange={app.setMaxDivergencePercent}
+    />
   {/if}
 </main>

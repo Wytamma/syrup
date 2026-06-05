@@ -7,7 +7,7 @@ const CMAPLE_MAX_SUBS_PER_SITE = 0.067
 const CMAPLE_MEAN_SUBS_PER_SITE = 0.02
 const LARGE_ALIGNMENT_SITE_COUNT = 50_000_000
 const LONG_RUN_RECOMMENDATION =
-  'Consider turning off SH-aLRT support or lowering the number of replicates for a faster less robust analysis.'
+  'Consider turning off branch support for a faster less robust analysis.'
 
 export function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`
@@ -165,7 +165,7 @@ export function getDisplayedWarnings(
 function getConstantSiteWarnings(counts: ConstantSiteCounts) {
   return getTotalConstantSites(counts) > 0
     ? [
-        'With constant-site counts, inference uses an adjusted alignment length for likelihood, branch lengths, and SH-aLRT support. SH-aLRT may take longer when many constant sites are supplied.',
+        'With constant-site counts, inference uses an adjusted alignment length for likelihood, branch lengths, and branch support. Branch support may take longer when many constant sites are supplied.',
       ]
     : []
 }
@@ -202,8 +202,8 @@ function getWarningsForSummary(summary: AlignmentWarningSummary, originalStats: 
   return [
     [
       isLargeObservedAlignment
-        ? 'This is a large alignment and may take several minutes in the browser, especially with SH-aLRT support enabled.'
-        : 'This alignment may take several minutes in the browser, especially with SH-aLRT support enabled.',
+        ? 'This is a large alignment and may take several minutes in the browser, especially with branch support enabled.'
+        : 'This alignment may take several minutes in the browser, especially with branch support enabled.',
       details.length ? ` It has ${details.join(' and ')}.` : '',
       ' ',
       LONG_RUN_RECOMMENDATION,
