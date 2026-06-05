@@ -59,6 +59,10 @@ export type CmapleWorkerRequest =
       constantSites: ConstantSiteCounts
     }
   | {
+      type: 'export-maple'
+      id: string
+    }
+  | {
       type: 'clear'
       id: string
     }
@@ -91,6 +95,11 @@ export type CmapleWorkerResponse =
       logLikelihood: number
       effective: boolean
       warnings: string[]
+    }
+  | {
+      type: 'maple-export'
+      id: string
+      maple: string
     }
   | {
       type: 'error'

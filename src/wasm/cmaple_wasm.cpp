@@ -465,6 +465,17 @@ std::string warningSummaryJson(const cmaple::Alignment& alignment,
   return out.str();
 }
 
+std::string mapleExportJson(cmaple::Alignment& alignment) {
+  std::ostringstream maple;
+  alignment.write(maple, cmaple::Alignment::IN_MAPLE);
+
+  std::ostringstream out;
+  out << "{\"type\":\"maple-export\","
+      << "\"id\":\"\","
+      << "\"maple\":\"" << jsonEscape(maple.str()) << "\"}";
+  return out.str();
+}
+
 std::vector<SampleQuality> getSortedSampleQuality(const cmaple::Alignment& alignment) {
   std::vector<SampleQuality> samples;
   samples.reserve(alignment.data.size());
@@ -914,5 +925,23 @@ extern "C" char* cmaple_warning_summary(unsigned int handle,
     return copyResult(errorJson(err.what()));
   } catch (...) {
     return copyResult(errorJson("CMAPLE warning summary failed with an unknown error."));
+  }
+}
+
+extern "C" char* cmaple_export_maple(unsigned int handle) {
+  try {
+    auto loaded = loaded_alignments.find(handle);
+    if (loaded == loaded_alignments.end()) {
+      return copyResult(errorJson(
+          "The parsed alignment is no longer loaded. Drop the file again."));
+    }
+
+    cmaple::verbose_mode = cmaple::VB_QUIET;
+    cmaple::Alignment& alignment = *loaded->second.alignment;
+    return copyResult(mapleExportJson(alignment));
+  } catch (const std::exception& err) {
+    return copyResult(errorJson(err.what()));
+  } catch (...) {
+    return copyResult(errorJson("CMAPLE MAPLE export failed with an unknown error."));
   }
 }

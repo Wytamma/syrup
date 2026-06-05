@@ -113,6 +113,6 @@ em++ \
   -sINITIAL_MEMORY="$CMAPLE_INITIAL_MEMORY_BYTES" \
   -sALLOW_MEMORY_GROWTH=1 \
   -sMAXIMUM_MEMORY="$CMAPLE_MAXIMUM_MEMORY_BYTES" \
-  -sEXPORTED_FUNCTIONS='["_cmaple_alloc","_cmaple_free","_cmaple_release","_cmaple_analyze","_cmaple_infer","_cmaple_infer_loaded","_cmaple_warning_summary"]' \
+  -sEXPORTED_FUNCTIONS='["_cmaple_alloc","_cmaple_free","_cmaple_release","_cmaple_analyze","_cmaple_infer","_cmaple_infer_loaded","_cmaple_warning_summary","_cmaple_export_maple"]' \
   -sEXPORTED_RUNTIME_METHODS='["HEAPU8"]' \
   -o public/cmaple-threaded.js

@@ -46,6 +46,7 @@ export function createCmapleApp() {
     elapsedMs: 0,
     didCopyNewick: false,
     didDownloadNewick: false,
+    isExportingMaple: false,
     numThreads: Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1)),
     maxThreads: Math.max(1, navigator.hardwareConcurrency || 1),
     computeBranchSupport: true,
@@ -101,6 +102,7 @@ export function createCmapleApp() {
     runInference,
     copyNewick,
     downloadNewick,
+    downloadMaple,
     toggleInternalLabels,
     toggleLeafLabels,
     returnToRunSettings,
@@ -203,6 +205,7 @@ export function createCmapleApp() {
     app.showLeafLabels = true
     app.didCopyNewick = false
     app.didDownloadNewick = false
+    app.isExportingMaple = false
     clearFeedbackTimer('copy')
     clearFeedbackTimer('download')
     app.elapsedMs = 0
@@ -320,6 +323,16 @@ export function createCmapleApp() {
     showActionFeedback('download')
   }
 
+  function downloadMaple() {
+    if (!app.currentId || app.state === 'preflight' || app.state === 'running') return
+    app.isExportingMaple = true
+    app.error = ''
+    getWorker().postMessage({
+      type: 'export-maple',
+      id: app.currentId,
+    })
+  }
+
   function toggleInternalLabels() {
     app.showInternalLabels = !app.showInternalLabels
   }
@@ -423,6 +436,7 @@ export function createCmapleApp() {
 
       if (message.type === 'error') {
         app.error = message.error
+        app.isExportingMaple = false
         app.warningSummaryPending = false
         stopTimer()
         app.state = app.stats ? 'ready' : 'error'
@@ -454,6 +468,19 @@ export function createCmapleApp() {
           app.warningSummary = summary
           app.warningSummaryPending = false
         }
+        return
+      }
+
+      if (message.type === 'maple-export') {
+        const blob = new Blob([message.maple], { type: 'text/plain;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        const baseName = app.fileName.replace(/\.[^.]+$/, '') || 'alignment'
+        link.href = url
+        link.download = `${baseName}.maple`
+        link.click()
+        URL.revokeObjectURL(url)
+        app.isExportingMaple = false
         return
       }
 

@@ -48,6 +48,7 @@ type EmscriptenModule = {
     constantG: number,
     constantT: number,
   ) => number
+  _cmaple_export_maple: (handle: number) => number
 }
 
 type StoredAlignment = {
@@ -345,6 +346,32 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
           `removedCount=${result.warningSummary.removedCount}`,
         ].join(' '),
       )
+      post(result)
+      return
+    }
+
+    if (message.type === 'export-maple') {
+      const exportStartedAt = performance.now()
+      const resultPtr = module._cmaple_export_maple(stored.wasmHandle)
+      if (!resultPtr) throw new Error('CMAPLE did not return a MAPLE export.')
+      const decodeStartedAt = performance.now()
+      const json = readCStringFromBytes(module.HEAPU8, resultPtr)
+      const decodeMs = performance.now() - decodeStartedAt
+      module._cmaple_free(resultPtr)
+      const result = JSON.parse(json) as CmapleWorkerResponse
+      if (result.type !== 'log') result.id = message.id
+      if (result.type === 'maple-export') {
+        bench(
+          message.id,
+          [
+            'maple-export.done',
+            `exportMs=${ms(performance.now() - exportStartedAt)}`,
+            `decodeMs=${ms(decodeMs)}`,
+            `mapleChars=${result.maple.length}`,
+            `heapMiB=${heapMiB(module)}`,
+          ].join(' '),
+        )
+      }
       post(result)
       return
     }

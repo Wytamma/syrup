@@ -43,9 +43,24 @@
     </div>
 
     <div class="file-line">
-      <strong>{app.fileName}</strong>
+      <div class="file-details">
+        <strong>{app.fileName}</strong>
+        {#if app.state !== 'preflight' && app.state !== 'running'}
+          <a
+            href="/"
+            class="text-link"
+            aria-disabled={app.isExportingMaple}
+            onclick={(event) => {
+              event.preventDefault()
+              if (!app.isExportingMaple) app.downloadMaple()
+            }}
+          >
+            {app.isExportingMaple ? 'Preparing MAPLE...' : 'Download MAPLE format'}
+          </a>
+        {/if}
+      </div>
       {#if app.selectedFile}
-        <span>{formatFileSize(app.selectedFile.size)}</span>
+        <span class="file-size">{formatFileSize(app.selectedFile.size)}</span>
       {/if}
     </div>
 
