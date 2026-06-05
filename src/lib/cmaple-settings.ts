@@ -185,7 +185,8 @@ export function isCurrentWarningSummary(
 }
 
 function getWarningsForSummary(summary: AlignmentWarningSummary, originalStats: AlignmentStats) {
-  const isLargeObservedAlignment = summary.sequenceCount * originalStats.sequenceLength >= LARGE_ALIGNMENT_SITE_COUNT
+  const observedColumnCount = summary.variableColumns + Math.ceil(summary.meanAmbiguousSites)
+  const isLargeObservedAlignment = summary.sequenceCount * observedColumnCount >= LARGE_ALIGNMENT_SITE_COUNT
   const variableColumnsPerKb = originalStats.sequenceLength ? summary.variableColumns / (originalStats.sequenceLength / 1000) : 0
   const hasDenseVariation = summary.variableColumns >= 2000 && variableColumnsPerKb >= 50
   const hasSubstantialAmbiguity = summary.meanAmbiguousSites >= 100 && summary.ambiguousFraction >= 0.01

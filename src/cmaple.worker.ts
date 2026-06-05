@@ -130,9 +130,14 @@ function readCStringFromBytes(bytes: Uint8Array, ptr: number) {
   return new TextDecoder().decode(Uint8Array.from(bytes.subarray(ptr, end)))
 }
 
-function getLikelyLongRunWarning(summary: AlignmentWarningSummary) {
+function getObservedWarningColumnCount(summary: AlignmentWarningSummary, _stats: AlignmentStats) {
+  return summary.variableColumns + Math.ceil(summary.meanAmbiguousSites)
+}
+
+function getLikelyLongRunWarning(summary: AlignmentWarningSummary, stats: AlignmentStats) {
+  const observedColumnCount = getObservedWarningColumnCount(summary, stats)
   const largeAlignmentWarning =
-    summary.sequenceCount * summary.sequenceLength >= 50_000_000
+    summary.sequenceCount * observedColumnCount >= 50_000_000
       ? 'This is a large alignment and may take several minutes in the browser, especially with branch support enabled.'
       : ''
 
@@ -283,7 +288,7 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         preflight.id = message.id
         preflight.stats.fileName = message.fileName
         preflight.stats.fileSize = message.data.byteLength
-        const longRunWarning = getLikelyLongRunWarning(preflight.warningSummary)
+        const longRunWarning = getLikelyLongRunWarning(preflight.warningSummary, preflight.stats)
         if (longRunWarning) preflight.warnings = [...preflight.warnings, longRunWarning]
         stored.wasmHandle = preflight.handle
         stored.stats = preflight.stats
