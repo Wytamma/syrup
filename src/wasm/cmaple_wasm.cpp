@@ -671,11 +671,6 @@ std::unique_ptr<cmaple::Alignment> parseAlignment(const unsigned char* data,
     throw std::invalid_argument(
         "Compressed .gz input is not supported in the browser build. Please upload a plain text FASTA, PHYLIP, or MAPLE file.");
   }
-  if (format == FORMAT_AUTO && !alignment_text.empty() &&
-      alignment_text.front() == '>') {
-    format = FORMAT_FASTA;
-  }
-
   const std::size_t fasta_headers = countFastaHeaders(alignment_text);
   if (toCmapleFormat(format) == cmaple::Alignment::IN_FASTA &&
       fasta_headers > 0 && fasta_headers < 3) {
