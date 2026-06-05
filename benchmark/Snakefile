@@ -1,0 +1,193 @@
+import glob
+from pathlib import Path
+
+
+configfile: "benchmark/config.yaml"
+
+
+DATASET_DIR = Path(config["dataset_dir"])
+RESULTS_DIR = Path(config["results_dir"])
+LOGS_DIR = Path(config["logs_dir"])
+METRICS_DIR = Path(config["metrics_dir"])
+REPLICATES = [str(i) for i in range(1, int(config["replicates"]) + 1)]
+EXCLUDE_DATASETS = set(config.get("exclude_datasets", []))
+DATASET_EXTENSIONS = ("*.fa", "*.fasta", "*.fna", "*.maple")
+DATASETS = {
+    Path(path).stem: path
+    for pattern in DATASET_EXTENSIONS
+    for path in sorted(glob.glob(str(DATASET_DIR / pattern)))
+    if Path(path).stem not in EXCLUDE_DATASETS
+}
+
+
+if not DATASETS:
+    raise WorkflowError(f"No FASTA or MAPLE datasets found in {DATASET_DIR}")
+
+
+rule all:
+    input:
+        RESULTS_DIR / "summary.tsv",
+        RESULTS_DIR / "rf.tsv",
+        RESULTS_DIR / "final.tsv",
+
+
+rule build_cmaple_cli:
+    output:
+        config["cmaple"]["binary"],
+    threads: 4
+    log:
+        LOGS_DIR / "build-cmaple-cli.log",
+    shell:
+        """
+        mkdir -p {config[cmaple][build_dir]} {LOGS_DIR}
+        bash benchmark/scripts/build_cmaple_cli.sh {config[cmaple][build_dir]} {threads} > {log} 2>&1
+        test -x {output}
+        """
+
+
+rule build_syrup_app:
+    output:
+        "dist/index.html",
+    log:
+        LOGS_DIR / "build-syrup-app.log",
+    shell:
+        """
+        mkdir -p {LOGS_DIR}
+        npm run build > {log} 2>&1
+        """
+
+
+rule cli_run:
+    input:
+        cmaple=config["cmaple"]["binary"],
+        dataset=lambda wildcards: DATASETS[wildcards.dataset],
+    output:
+        tree=RESULTS_DIR / "cli/{dataset}/rep-{rep}.treefile",
+        metrics=METRICS_DIR / "cli/{dataset}/rep-{rep}.json",
+        runtime_tsv=METRICS_DIR / "snakemake/cli/{dataset}/rep-{rep}.tsv",
+    params:
+        prefix=lambda wildcards: RESULTS_DIR / f"cli/{wildcards.dataset}/rep-{wildcards.rep}",
+        branch_support=lambda wildcards: "true" if config["branch_support"] else "false",
+        branch_support_method=lambda wildcards: config.get("branch_support_method", "sprta"),
+        format=lambda wildcards: "MAPLE" if Path(DATASETS[wildcards.dataset]).suffix.lower() == ".maple" else "FASTA",
+    log:
+        LOGS_DIR / "cli/{dataset}/rep-{rep}.log",
+    shell:
+        """
+        mkdir -p $(dirname {output.tree}) $(dirname {output.metrics}) $(dirname {output.runtime_tsv}) $(dirname {log})
+        python benchmark/scripts/measure_process.py \
+          --metrics {output.metrics} \
+          --log {log} \
+          -- \
+          python benchmark/scripts/run_cli.py \
+            --cmaple {input.cmaple} \
+            --dataset {input.dataset} \
+            --output-prefix {params.prefix} \
+            --format {params.format} \
+            --threads {config[threads]} \
+            --branch-support {params.branch_support} \
+            --branch-support-method {params.branch_support_method} \
+            --replicates {config[branch_support_replicates]}
+        python benchmark/scripts/write_runtime_tsv.py \
+          --tool cli \
+          --metrics {output.metrics} \
+          --log {log} \
+          --output {output.runtime_tsv}
+        """
+
+
+rule browser_run:
+    input:
+        app="dist/index.html",
+        dataset=lambda wildcards: DATASETS[wildcards.dataset],
+    output:
+        tree=RESULTS_DIR / "browser/{dataset}/rep-{rep}.nwk",
+        metrics=METRICS_DIR / "browser/{dataset}/rep-{rep}.json",
+        runtime_tsv=METRICS_DIR / "snakemake/browser/{dataset}/rep-{rep}.tsv",
+    log:
+        LOGS_DIR / "browser/{dataset}/rep-{rep}.log",
+    shell:
+        """
+        mkdir -p $(dirname {output.tree}) $(dirname {output.metrics}) $(dirname {output.runtime_tsv}) $(dirname {log})
+        python benchmark/scripts/measure_process.py \
+          --metrics {output.metrics} \
+          --log {log} \
+          -- \
+          node benchmark/scripts/run_browser_benchmark.mjs \
+            --dataset {input.dataset} \
+            --output {output.tree} \
+            --threads {config[threads]} \
+            --branch-support {config[branch_support]} \
+            --branch-support-method {config[branch_support_method]} \
+            --replicates {config[branch_support_replicates]} \
+            --filter-divergent-samples {config[filter_divergent_samples]} \
+            --max-divergence-percent {config[max_divergence_percent]} \
+            --host {config[browser][host]} \
+            --start-port {config[browser][start_port]} \
+            --server-timeout-seconds {config[browser][server_timeout_seconds]}
+        python benchmark/scripts/write_runtime_tsv.py \
+          --tool browser \
+          --metrics {output.metrics} \
+          --log {log} \
+          --output {output.runtime_tsv}
+        """
+
+
+rule rf_compare:
+    input:
+        cli=RESULTS_DIR / "cli/{dataset}/rep-{rep}.treefile",
+        browser=RESULTS_DIR / "browser/{dataset}/rep-{rep}.nwk",
+    output:
+        RESULTS_DIR / "rf/{dataset}/rep-{rep}.tsv",
+    log:
+        LOGS_DIR / "rf/{dataset}/rep-{rep}.log",
+    shell:
+        """
+        mkdir -p $(dirname {output}) $(dirname {log})
+        python benchmark/scripts/compare_rf.py \
+          --dataset {wildcards.dataset} \
+          --replicate {wildcards.rep} \
+          --cli-tree {input.cli} \
+          --browser-tree {input.browser} \
+          --output {output} \
+          > {log} 2>&1
+        """
+
+
+rule rf_summary:
+    input:
+        expand(RESULTS_DIR / "rf/{dataset}/rep-{rep}.tsv", dataset=DATASETS.keys(), rep=REPLICATES),
+    output:
+        RESULTS_DIR / "rf.tsv",
+    shell:
+        """
+        python benchmark/scripts/concat_tsv.py --output {output} {input}
+        """
+
+
+rule summary:
+    input:
+        cli_metrics=expand(METRICS_DIR / "cli/{dataset}/rep-{rep}.json", dataset=DATASETS.keys(), rep=REPLICATES),
+        browser_metrics=expand(METRICS_DIR / "browser/{dataset}/rep-{rep}.json", dataset=DATASETS.keys(), rep=REPLICATES),
+        cli_logs=expand(LOGS_DIR / "cli/{dataset}/rep-{rep}.log", dataset=DATASETS.keys(), rep=REPLICATES),
+        browser_logs=expand(LOGS_DIR / "browser/{dataset}/rep-{rep}.log", dataset=DATASETS.keys(), rep=REPLICATES),
+        rf=RESULTS_DIR / "rf.tsv",
+    output:
+        RESULTS_DIR / "summary.tsv",
+        RESULTS_DIR / "summary.json",
+        RESULTS_DIR / "final.tsv",
+    params:
+        datasets=" ".join(DATASETS.keys()),
+        replicates=" ".join(REPLICATES),
+    shell:
+        """
+        python benchmark/scripts/aggregate_results.py \
+          --datasets {params.datasets} \
+          --replicates {params.replicates} \
+          --metrics-dir {METRICS_DIR} \
+          --logs-dir {LOGS_DIR} \
+          --rf {input.rf} \
+          --summary-tsv {output[0]} \
+          --summary-json {output[1]} \
+          --final-tsv {output[2]}
+        """

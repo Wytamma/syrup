@@ -30,6 +30,8 @@ test-results
 *.njsproj
 *.sln
 *.sw?
+*.pyc
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+.snakemake
