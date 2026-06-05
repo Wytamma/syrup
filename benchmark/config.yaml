@@ -6,7 +6,7 @@ logs_dir: benchmark/logs
 metrics_dir: benchmark/metrics
 
 replicates: 3
-threads: 4
+threads: 1
 branch_support: true
 branch_support_method: sprta
 branch_support_replicates: 1000
