@@ -7,6 +7,7 @@ declare module '@phylocanvas/phylocanvas.gl' {
     showInternalLabels?: boolean
     showLeafLabels?: boolean
     interactive?: boolean
+    nodeSize?: number
     backgroundColour?: [number, number, number, number] | null
     fillColour?: [number, number, number, number]
     strokeColour?: [number, number, number, number]

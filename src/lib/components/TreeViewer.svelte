@@ -63,6 +63,7 @@
       showInternalLabels,
       showLeafLabels,
       interactive: true,
+      nodeSize: 10,
       ...getThemeOptions(),
     }
   }
