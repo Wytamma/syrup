@@ -5,7 +5,6 @@ import {
   formatConstantSites,
   getAdjustedDivergence,
   getAdjustedSequenceLength,
-  getDefaultThreadCount,
   getDisplayedWarnings,
   getEffectiveStatus,
   getTotalConstantSites,
@@ -58,7 +57,7 @@ export function createCmapleApp() {
     didCopyNewick: false,
     didDownloadNewick: false,
     isExportingMaple: false,
-    numThreads: Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1)),
+    numThreads: 1,
     maxThreads: Math.max(1, navigator.hardwareConcurrency || 1),
     branchSupportMethod: 'sprta' as BranchSupportMethod,
     branchSupportReplicates: 1000,
@@ -346,7 +345,11 @@ export function createCmapleApp() {
     if (!app.currentId || app.state !== 'ready') return
     app.branchSupportReplicates = Math.max(1, Math.floor(Number(app.branchSupportReplicates) || 1000))
     app.branchSupportEpsilon = Math.max(0, Number(app.branchSupportEpsilon) || 0.1)
-    app.maxDivergencePercent = Math.max(0, Number(app.maxDivergencePercent) || DEFAULT_MAX_DIVERGENCE_PERCENT)
+    const maxDivergencePercent = Number(app.maxDivergencePercent)
+    app.maxDivergencePercent = Math.max(
+      0,
+      Number.isFinite(maxDivergencePercent) ? maxDivergencePercent : DEFAULT_MAX_DIVERGENCE_PERCENT,
+    )
     app.error = ''
     app.logs = []
     pendingLogLines = []
@@ -537,7 +540,6 @@ export function createCmapleApp() {
         app.maxDivergencePercent = DEFAULT_MAX_DIVERGENCE_PERCENT
         app.effective = message.effective
         app.warnings = message.warnings
-        app.numThreads = getDefaultThreadCount(message.warningSummary, app.maxThreads)
         app.error = ''
         refreshDerivedAlignmentState()
         stopTimer()

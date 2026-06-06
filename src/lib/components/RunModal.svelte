@@ -124,7 +124,7 @@
         <div class="stats-grid">
           <div>
             <span>Sequences</span>
-            <strong>{stats.sequenceCount.toLocaleString()}</strong>
+            <strong>{(warningSummary?.sequenceCount ?? stats.sequenceCount).toLocaleString()}</strong>
           </div>
           <div>
             <span>Sequence length</span>
@@ -155,19 +155,16 @@
         <div class="warning">{displayedWarnings.join(' ')}</div>
       {/if}
 
-      <div class="options">
-        <ThreadOption
-          value={numThreads}
-          max={maxThreads}
-          disabled={state === 'running' || !crossOriginIsolated}
-          onChange={onNumThreadsChange}
-        />
-      </div>
-
       <details bind:this={advancedOptionsElement} bind:open={advancedOptionsOpen} class="advanced-options">
         <summary>Advanced Options</summary>
         {#if advancedOptionsOpen}
           <div class="options">
+            <ThreadOption
+              value={numThreads}
+              max={maxThreads}
+              disabled={state === 'running' || !crossOriginIsolated}
+              onChange={onNumThreadsChange}
+            />
             <BranchSupportOption
               method={branchSupportMethod}
               replicates={branchSupportReplicates}
