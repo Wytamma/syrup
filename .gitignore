@@ -35,3 +35,8 @@ test-results
 .pixi/*
 !.pixi/config.toml
 .snakemake
+
+# Simulation outputs
+simulations/*.fasta
+simulations/*.log
+simulations/*.nwk
