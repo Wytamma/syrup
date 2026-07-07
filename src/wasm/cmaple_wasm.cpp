@@ -749,7 +749,8 @@ std::string inferAlignment(cmaple::Alignment& alignment,
       message << "The divergence/quality filter would leave "
               << filter_result.retained
               << " sample" << (filter_result.retained == 1 ? "" : "s")
-              << ". CMAPLE requires at least 3 samples. Increase the threshold or turn filtering off.";
+              << ". CMAPLE requires at least 3 samples. Increase the "
+                 "threshold or turn filtering off.";
       return errorJson(message.str());
     }
 
@@ -766,6 +767,12 @@ std::string inferAlignment(cmaple::Alignment& alignment,
   }
 
   ScopedConstantSites scoped_constant_sites(alignment, constant_sites);
+  const WarningSummary warning_summary =
+      getWarningSummary(alignment, false, 0, {});
+  if (warning_summary.variable_columns == 0) {
+    return errorJson("Alignment has no variable sites.");
+  }
+
   const bool effective = cmaple::isEffective(alignment);
   cmaple::Model model(cmaple::ModelBase::GTR, cmaple::SeqRegion::SEQ_DNA);
   cmaple::Tree tree(&alignment, &model);
@@ -800,7 +807,8 @@ std::string inferAlignment(cmaple::Alignment& alignment,
              compute_sprta);
   profileLog("treeInfer", nowMs() - phase_started_ms);
 
-  if (!compute_sprta && branch_support_method == BRANCH_SUPPORT_SH_ALRT && branch_support_replicates > 0) {
+  if (!compute_sprta && branch_support_method == BRANCH_SUPPORT_SH_ALRT &&
+      branch_support_replicates > 0) {
     phase_started_ms = nowMs();
     tree.computeBranchSupport(num_threads, branch_support_replicates, branch_support_epsilon);
     profileLog("branchSupport", nowMs() - phase_started_ms);
