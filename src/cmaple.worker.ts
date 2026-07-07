@@ -177,7 +177,7 @@ async function loadCmaple() {
       const runtimeAssetVersion = Date.now().toString(36)
       const scriptResponse = await fetch(`/cmaple-threaded.js?v=${runtimeAssetVersion}`, { cache: 'no-store' })
       if (!scriptResponse.ok) {
-        throw new Error('CMAPLE threaded artifact is missing. Run `npm run build:wasm` first.')
+        throw new Error('CMAPLE threaded artifact is missing. Run `pixi run build-wasm` first.')
       }
 
       const scriptSource = await scriptResponse.text()
