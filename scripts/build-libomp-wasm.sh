@@ -22,6 +22,8 @@ fi
 export CFLAGS="${CFLAGS:-} -pthread"
 export CXXFLAGS="${CXXFLAGS:-} -pthread"
 
+
+# https://github.com/abrown/wasm-openmp-examples
 emcmake cmake \
   -S "$LLVM_DIR/openmp" \
   -B "$BUILD_DIR" \
