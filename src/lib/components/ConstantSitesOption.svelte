@@ -30,7 +30,7 @@
       value={text}
       placeholder="A, C, G, T counts"
       aria-label="Constant site counts in A, C, G, T order"
-      disabled={disabled}
+      disabled={!enabled}
       oninput={(event) => onTextChange(event.currentTarget.value, false)}
       onchange={(event) => onTextCommit(event.currentTarget.value)}
       onblur={(event) => {

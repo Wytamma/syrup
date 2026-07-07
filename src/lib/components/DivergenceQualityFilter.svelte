@@ -222,7 +222,7 @@
 <div class="option-group divergence-option">
   <div class="option-heading">
     <span>Divergence / quality filter</span>
-    <strong>{formatPercent(draftThreshold)}</strong>
+    <strong class:filter-disabled={!enabled}>{formatPercent(draftThreshold)}</strong>
   </div>
   <div class="divergence-control" class:filter-enabled={enabled}>
     <input
@@ -286,6 +286,10 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .option-heading strong.filter-disabled {
+    opacity: 0.55;
+  }
+
   .divergence-control {
     position: relative;
     display: grid;
@@ -345,6 +349,10 @@
     transform: translateY(-50%);
     overflow: hidden;
     background: var(--surface);
+  }
+
+  .divergence-control:not(.filter-enabled) .divergence-track {
+    opacity: 0.55;
   }
 
   .divergence-threshold-line {
