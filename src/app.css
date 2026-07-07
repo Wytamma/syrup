@@ -711,6 +711,7 @@ h1 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
+  margin-bottom: 8px;
 }
 
 .branch-support-alrt-options label {
@@ -727,6 +728,26 @@ h1 {
 
 .branch-support-alrt-options input[type='number'] {
   width: 100%;
+}
+
+.branch-support-thread-option {
+  grid-column: 1 / -1;
+}
+
+.branch-support-thread-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.branch-support-thread-control input[type='range'] {
+  width: 100%;
+}
+
+.branch-support-thread-control strong {
+  justify-self: end;
 }
 
 .option-note {

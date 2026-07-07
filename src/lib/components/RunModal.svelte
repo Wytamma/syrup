@@ -12,7 +12,6 @@
   import BranchSupportOption from './BranchSupportOption.svelte'
   import ConstantSitesOption from './ConstantSitesOption.svelte'
   import DivergenceQualityFilter from './DivergenceQualityFilter.svelte'
-  import ThreadOption from './ThreadOption.svelte'
 
   export let state: AppState
   export let selectedFile: File | null = null
@@ -159,20 +158,18 @@
         <summary>Advanced Options</summary>
         {#if advancedOptionsOpen}
           <div class="options">
-            <ThreadOption
-              value={numThreads}
-              max={maxThreads}
-              disabled={state === 'running' || !crossOriginIsolated}
-              onChange={onNumThreadsChange}
-            />
             <BranchSupportOption
               method={branchSupportMethod}
               replicates={branchSupportReplicates}
               epsilon={branchSupportEpsilon}
+              threads={numThreads}
+              {maxThreads}
               disabled={state === 'running'}
+              threadsDisabled={state === 'running' || !crossOriginIsolated}
               onMethodChange={onBranchSupportMethodChange}
               onReplicatesChange={onBranchSupportReplicatesChange}
               onEpsilonChange={onBranchSupportEpsilonChange}
+              onThreadsChange={onNumThreadsChange}
             />
             <ConstantSitesOption
               text={constantSitesText}
