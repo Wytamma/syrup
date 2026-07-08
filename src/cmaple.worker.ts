@@ -37,6 +37,7 @@ type EmscriptenModule = {
     branchLengthsFixed: number,
     noReroot: number,
     treeSearchType: number,
+    estimateMat: number,
   ) => number
   _cmaple_infer_loaded: (
     handle: number,
@@ -58,6 +59,7 @@ type EmscriptenModule = {
     branchLengthsFixed: number,
     noReroot: number,
     treeSearchType: number,
+    estimateMat: number,
   ) => number
   _cmaple_warning_summary: (
     handle: number,
@@ -482,6 +484,7 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         `branchLengthsFixed=${message.branchLengthsFixed}`,
         `noReroot=${message.noReroot}`,
         `treeSearchType=${message.treeSearchType}`,
+        `estimateMat=${message.estimateMat}`,
         `cpus=${navigator.hardwareConcurrency || 'unknown'}`,
         `crossOriginIsolated=${crossOriginIsolated}`,
         `runtimeReadyMs=${ms(runtimeReadyMs)}`,
@@ -528,6 +531,7 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         message.branchLengthsFixed ? 1 : 0,
         message.noReroot ? 1 : 0,
         treeSearchTypeIds[message.treeSearchType],
+        message.estimateMat ? 1 : 0,
       )
     } finally {
       if (referenceTreePtr) module._cmaple_free(referenceTreePtr)
@@ -552,6 +556,7 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
           `heapMiB=${heapMiB(module)}`,
           `logLikelihood=${result.logLikelihood}`,
           `newickChars=${result.newick.length}`,
+          `nexusChars=${result.nexus?.length ?? 0}`,
         ].join(' '),
       )
     }

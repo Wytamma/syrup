@@ -73,6 +73,7 @@
       branchLengthsFixed={app.branchLengthsFixed}
       noReroot={app.noReroot}
       treeSearchType={app.treeSearchType}
+      estimateMat={app.estimateMat}
       activeConstantSites={app.activeConstantSites}
       adjustedSequenceLength={app.adjustedSequenceLength}
       crossOriginIsolated={globalThis.crossOriginIsolated}
@@ -94,6 +95,7 @@
       onBranchLengthsFixedChange={app.setBranchLengthsFixed}
       onNoRerootChange={app.setNoReroot}
       onTreeSearchTypeChange={app.setTreeSearchType}
+      onEstimateMatChange={app.setEstimateMat}
       onFilterDivergentSamplesChange={app.setFilterDivergentSamples}
       onMaxDivergencePercentChange={app.setMaxDivergencePercent}
     />

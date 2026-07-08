@@ -46,6 +46,7 @@
   export let branchLengthsFixed = false
   export let noReroot = false
   export let treeSearchType: TreeSearchType = 'normal'
+  export let estimateMat = false
   export let activeConstantSites: ConstantSiteCounts = { a: 0, c: 0, g: 0, t: 0 }
   export let adjustedSequenceLength = 0
   export let crossOriginIsolated = false
@@ -67,6 +68,7 @@
   export let onBranchLengthsFixedChange: (enabled: boolean) => void = () => {}
   export let onNoRerootChange: (enabled: boolean) => void = () => {}
   export let onTreeSearchTypeChange: (value: TreeSearchType) => void = () => {}
+  export let onEstimateMatChange: (enabled: boolean) => void = () => {}
   export let onFilterDivergentSamplesChange: (enabled: boolean) => void = () => {}
   export let onMaxDivergencePercentChange: (value: number) => void = () => {}
 
@@ -204,6 +206,11 @@
         <summary>Advanced Options</summary>
         {#if advancedOptionsOpen}
           <div class="options">
+            <TreeSearchOption
+              value={treeSearchType}
+              disabled={state === 'running'}
+              onChange={onTreeSearchTypeChange}
+            />
             <ReferenceTreeOption
               fileName={referenceTreeFileName}
               {referenceAlignmentFileName}
@@ -215,11 +222,16 @@
               onBranchLengthsFixedChange={onBranchLengthsFixedChange}
               onNoRerootChange={onNoRerootChange}
             />
-            <TreeSearchOption
-              value={treeSearchType}
-              disabled={state === 'running'}
-              onChange={onTreeSearchTypeChange}
-            />
+           <label class="checkbox-option estimate-mat-option">
+              <span>Infer mutations along each branch and output a mutation-annotated tree (MAT)</span>
+              <input
+                type="checkbox"
+                checked={estimateMat}
+                disabled={state === 'running'}
+                onchange={(event) => onEstimateMatChange(event.currentTarget.checked)}
+                aria-label="Infer mutations along each branch and output a mutation-annotated tree"
+              />
+            </label> 
             <ConstantSitesOption
               text={constantSitesText}
               {constantSites}

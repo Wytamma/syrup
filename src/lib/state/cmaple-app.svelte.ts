@@ -94,6 +94,7 @@ export function createCmapleApp() {
     warningSummaryPending: false,
     logs: [] as string[],
     newick: '',
+    nexus: '',
     logLikelihood: null as number | null,
     showInternalLabels: false,
     showLeafLabels: true,
@@ -119,6 +120,7 @@ export function createCmapleApp() {
     branchLengthsFixed: false,
     noReroot: false,
     treeSearchType: 'normal' as TreeSearchType,
+    estimateMat: false,
 
     get divergence() {
       app.divergenceVersion
@@ -148,6 +150,7 @@ export function createCmapleApp() {
     setBranchLengthsFixed,
     setNoReroot,
     setTreeSearchType,
+    setEstimateMat,
     clearCurrent,
     loadAlignmentFromUrl,
     loadFile,
@@ -383,6 +386,10 @@ export function createCmapleApp() {
     app.treeSearchType = value
   }
 
+  function setEstimateMat(value: boolean) {
+    app.estimateMat = value
+  }
+
   function getSupportedModels(sequenceType: SequenceType) {
     return sequenceType === 'protein' ? PROTEIN_MODELS : DNA_MODELS
   }
@@ -423,8 +430,10 @@ export function createCmapleApp() {
     app.branchLengthsFixed = false
     app.noReroot = false
     app.treeSearchType = 'normal'
+    app.estimateMat = false
     app.logs = []
     app.newick = ''
+    app.nexus = ''
     app.logLikelihood = null
     app.showInternalLabels = false
     app.showLeafLabels = true
@@ -485,6 +494,7 @@ export function createCmapleApp() {
       logFlushId = null
     }
     app.newick = ''
+    app.nexus = ''
     app.logLikelihood = null
     app.state = 'preflight'
     startTimer()
@@ -543,6 +553,7 @@ export function createCmapleApp() {
       branchLengthsFixed: app.branchLengthsFixed,
       noReroot: app.noReroot,
       treeSearchType: app.treeSearchType,
+      estimateMat: app.estimateMat,
     })
   }
 
@@ -554,12 +565,13 @@ export function createCmapleApp() {
 
   function downloadNewick() {
     if (!app.newick) return
-    const blob = new Blob([app.newick], { type: 'text/plain;charset=utf-8' })
+    const content = app.nexus || app.newick
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     const baseName = app.fileName.replace(/\.[^.]+$/, '') || 'cmaple-tree'
     link.href = url
-    link.download = `${baseName}.nwk`
+    link.download = app.nexus ? `${baseName}.mat.nex` : `${baseName}.nwk`
     link.click()
     URL.revokeObjectURL(url)
     showActionFeedback('download')
@@ -770,6 +782,7 @@ export function createCmapleApp() {
       app.error = ''
       flushLogLines()
       app.newick = message.newick
+      app.nexus = message.nexus ?? ''
       app.logLikelihood = message.logLikelihood
       app.effective = message.effective
       app.effectiveStatus = message.effective

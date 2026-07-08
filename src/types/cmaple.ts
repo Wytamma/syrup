@@ -109,6 +109,7 @@ export type CmapleWorkerRequest =
       branchLengthsFixed: boolean
       noReroot: boolean
       treeSearchType: TreeSearchType
+      estimateMat: boolean
     }
   | {
       type: 'export-maple'
@@ -144,6 +145,7 @@ export type CmapleWorkerResponse =
       type: 'result'
       id: string
       newick: string
+      nexus?: string
       logLikelihood: number
       effective: boolean
       warnings: string[]
