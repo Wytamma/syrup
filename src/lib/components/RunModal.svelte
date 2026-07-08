@@ -154,23 +154,26 @@
         <div class="warning">{displayedWarnings.join(' ')}</div>
       {/if}
 
+      <div class="options run-options">
+        <BranchSupportOption
+          method={branchSupportMethod}
+          replicates={branchSupportReplicates}
+          epsilon={branchSupportEpsilon}
+          threads={numThreads}
+          {maxThreads}
+          disabled={state === 'running'}
+          threadsDisabled={state === 'running' || !crossOriginIsolated}
+          onMethodChange={onBranchSupportMethodChange}
+          onReplicatesChange={onBranchSupportReplicatesChange}
+          onEpsilonChange={onBranchSupportEpsilonChange}
+          onThreadsChange={onNumThreadsChange}
+        />
+      </div>
+
       <details bind:this={advancedOptionsElement} bind:open={advancedOptionsOpen} class="advanced-options">
         <summary>Advanced Options</summary>
         {#if advancedOptionsOpen}
           <div class="options">
-            <BranchSupportOption
-              method={branchSupportMethod}
-              replicates={branchSupportReplicates}
-              epsilon={branchSupportEpsilon}
-              threads={numThreads}
-              {maxThreads}
-              disabled={state === 'running'}
-              threadsDisabled={state === 'running' || !crossOriginIsolated}
-              onMethodChange={onBranchSupportMethodChange}
-              onReplicatesChange={onBranchSupportReplicatesChange}
-              onEpsilonChange={onBranchSupportEpsilonChange}
-              onThreadsChange={onNumThreadsChange}
-            />
             <ConstantSitesOption
               text={constantSitesText}
               {constantSites}
