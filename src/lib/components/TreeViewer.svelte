@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
-  import { PhylocanvasGL, TreeTypes } from '@phylocanvas/phylocanvas.gl'
+  import { PhylocanvasGL, TreeTypes, plugins } from '@phylocanvas/phylocanvas.gl'
   import type { PhylocanvasOptions } from '@phylocanvas/phylocanvas.gl'
 
   export let newick: string
@@ -95,7 +95,7 @@
     if (!options) return
 
     if (!tree) {
-      tree = new PhylocanvasGL(container, options)
+      tree = new PhylocanvasGL(container, options, [plugins.scalebar])
       if (tree.deck?.props) {
         tree.deck.props.useDevicePixels = 2
       }

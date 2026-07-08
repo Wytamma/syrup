@@ -24,10 +24,17 @@ declare module '@phylocanvas/phylocanvas.gl' {
   }
 
   export type PhylocanvasModule = {
-    PhylocanvasGL: new (element: Element, options: PhylocanvasOptions) => {
+    PhylocanvasGL: new (
+      element: Element,
+      options: PhylocanvasOptions,
+      plugins?: unknown[],
+    ) => {
       destroy?: () => void
       setProps?: (options: Partial<PhylocanvasOptions>) => void
       render?: () => void
+    }
+    plugins: {
+      scalebar: unknown
     }
     TreeTypes: {
       Rectangular: string
@@ -50,4 +57,5 @@ declare module '@phylocanvas/phylocanvas.gl' {
   }
 
   export const PhylocanvasGL: PhylocanvasModule['PhylocanvasGL']
+  export const plugins: PhylocanvasModule['plugins']
 }
