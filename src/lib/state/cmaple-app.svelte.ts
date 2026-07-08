@@ -130,7 +130,7 @@ export function createCmapleApp() {
       id: app.currentId,
       filterDivergentSamples: app.filterDivergentSamples,
       maxDivergencePercent: app.maxDivergencePercent,
-      constantSites: getActiveConstantSites(),
+      constantSites: sanitizeConstantSites(getActiveConstantSites()),
     })
   }
 
