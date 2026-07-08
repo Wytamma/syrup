@@ -59,6 +59,7 @@
       isExportingMaple={app.isExportingMaple}
       numThreads={app.numThreads}
       maxThreads={app.maxThreads}
+      substitutionModel={app.substitutionModel}
       branchSupportMethod={app.branchSupportMethod}
       branchSupportReplicates={app.branchSupportReplicates}
       branchSupportEpsilon={app.branchSupportEpsilon}
@@ -67,6 +68,9 @@
       useConstantSites={app.useConstantSites}
       constantSites={app.constantSites}
       constantSitesText={app.constantSitesText}
+      referenceTreeFileName={app.referenceTreeFileName}
+      branchLengthsFixed={app.branchLengthsFixed}
+      treeSearchType={app.treeSearchType}
       activeConstantSites={app.activeConstantSites}
       adjustedSequenceLength={app.adjustedSequenceLength}
       crossOriginIsolated={globalThis.crossOriginIsolated}
@@ -75,6 +79,7 @@
       onDownloadMaple={app.downloadMaple}
       onRunInference={app.runInference}
       onNumThreadsChange={app.setNumThreads}
+      onSubstitutionModelChange={app.setSubstitutionModel}
       onBranchSupportMethodChange={app.setBranchSupportMethod}
       onBranchSupportReplicatesChange={app.setBranchSupportReplicates}
       onBranchSupportEpsilonChange={app.setBranchSupportEpsilon}
@@ -82,6 +87,9 @@
       onConstantSiteTextCommit={app.setConstantSiteCountsFromText}
       onFormattedConstantSiteTextChange={app.setConstantSitesText}
       onUseConstantSitesChange={app.setUseConstantSites}
+      onReferenceTreeFileChange={app.setReferenceTreeFile}
+      onBranchLengthsFixedChange={app.setBranchLengthsFixed}
+      onTreeSearchTypeChange={app.setTreeSearchType}
       onFilterDivergentSamplesChange={app.setFilterDivergentSamples}
       onMaxDivergencePercentChange={app.setMaxDivergencePercent}
     />

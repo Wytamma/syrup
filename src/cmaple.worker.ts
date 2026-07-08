@@ -5,6 +5,8 @@ import type {
   CmapleWorkerRequest,
   CmapleWorkerResponse,
   ConstantSiteCounts,
+  SubstitutionModel,
+  TreeSearchType,
 } from './types/cmaple'
 
 type EmscriptenModule = {
@@ -18,6 +20,7 @@ type EmscriptenModule = {
     size: number,
     format: number,
     numThreads: number,
+    substitutionModel: number,
     branchSupportMethod: number,
     branchSupportReplicates: number,
     branchSupportEpsilon: number,
@@ -27,10 +30,15 @@ type EmscriptenModule = {
     constantC: number,
     constantG: number,
     constantT: number,
+    treePtr: number,
+    treeSize: number,
+    branchLengthsFixed: number,
+    treeSearchType: number,
   ) => number
   _cmaple_infer_loaded: (
     handle: number,
     numThreads: number,
+    substitutionModel: number,
     branchSupportMethod: number,
     branchSupportReplicates: number,
     branchSupportEpsilon: number,
@@ -40,6 +48,10 @@ type EmscriptenModule = {
     constantC: number,
     constantG: number,
     constantT: number,
+    treePtr: number,
+    treeSize: number,
+    branchLengthsFixed: number,
+    treeSearchType: number,
   ) => number
   _cmaple_warning_summary: (
     handle: number,
@@ -90,6 +102,18 @@ const branchSupportMethodIds = {
   sprta: 1,
   'sh-alrt': 2,
 } as const
+
+const substitutionModelIds: Record<SubstitutionModel, number> = {
+  GTR: 0,
+  JC: 1,
+  UNREST: 2,
+}
+
+const treeSearchTypeIds: Record<TreeSearchType, number> = {
+  fast: 0,
+  normal: 1,
+  exhaustive: 2,
+}
 
 function post(response: CmapleWorkerResponse) {
   if (response.type === 'log') {
@@ -404,32 +428,54 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         `sequenceLength=${stored.stats?.sequenceLength ?? 'unknown'}`,
         `effective=${stored.effective ?? 'unknown'}`,
         `requestedThreads=${message.numThreads}`,
+        `substitutionModel=${message.substitutionModel}`,
         `branchSupportMethod=${message.branchSupportMethod}`,
         `branchSupportReplicates=${message.branchSupportReplicates}`,
         `branchSupportEpsilon=${message.branchSupportEpsilon}`,
         `divergenceFilter=${message.filterDivergentSamples}`,
         `maxDivergencePercent=${message.maxDivergencePercent}`,
         `constantSites=${Object.values(constantSites).join(',')}`,
+        `referenceTree=${message.referenceTreeText ? 'true' : 'false'}`,
+        `branchLengthsFixed=${message.branchLengthsFixed}`,
+        `treeSearchType=${message.treeSearchType}`,
         `cpus=${navigator.hardwareConcurrency || 'unknown'}`,
         `crossOriginIsolated=${crossOriginIsolated}`,
         `runtimeReadyMs=${ms(runtimeReadyMs)}`,
         `heapMiB=${heapMiB(module)}`,
       ].join(' '),
     )
+    const referenceTreeBytes = message.referenceTreeText ? new TextEncoder().encode(message.referenceTreeText) : null
+    let referenceTreePtr = 0
+    if (referenceTreeBytes?.byteLength) {
+      referenceTreePtr = module._cmaple_alloc(referenceTreeBytes.byteLength)
+      if (!referenceTreePtr) throw new Error('Could not allocate WASM memory for the reference tree.')
+      module.HEAPU8.set(referenceTreeBytes, referenceTreePtr)
+    }
+
     const inferStartedAt = performance.now()
-    const resultPtr = module._cmaple_infer_loaded(
-      stored.wasmHandle,
-      message.numThreads,
-      branchSupportMethodIds[message.branchSupportMethod],
-      message.branchSupportReplicates,
-      message.branchSupportEpsilon,
-      message.filterDivergentSamples ? 1 : 0,
-      message.maxDivergencePercent,
-      constantSites.a,
-      constantSites.c,
-      constantSites.g,
-      constantSites.t,
-    )
+    let resultPtr = 0
+    try {
+      resultPtr = module._cmaple_infer_loaded(
+        stored.wasmHandle,
+        message.numThreads,
+        substitutionModelIds[message.substitutionModel],
+        branchSupportMethodIds[message.branchSupportMethod],
+        message.branchSupportReplicates,
+        message.branchSupportEpsilon,
+        message.filterDivergentSamples ? 1 : 0,
+        message.maxDivergencePercent,
+        constantSites.a,
+        constantSites.c,
+        constantSites.g,
+        constantSites.t,
+        referenceTreePtr,
+        referenceTreeBytes?.byteLength ?? 0,
+        message.branchLengthsFixed ? 1 : 0,
+        treeSearchTypeIds[message.treeSearchType],
+      )
+    } finally {
+      if (referenceTreePtr) module._cmaple_free(referenceTreePtr)
+    }
     if (!resultPtr) throw new Error('CMAPLE did not return a result.')
     const decodeStartedAt = performance.now()
     const json = readCStringFromBytes(module.HEAPU8, resultPtr)

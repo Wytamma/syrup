@@ -32,6 +32,18 @@ enum BranchSupportMethod {
   BRANCH_SUPPORT_SH_ALRT = 2,
 };
 
+enum SubstitutionModel {
+  SUBSTITUTION_MODEL_GTR = 0,
+  SUBSTITUTION_MODEL_JC = 1,
+  SUBSTITUTION_MODEL_UNREST = 2,
+};
+
+enum TreeSearchMode {
+  TREE_SEARCH_FAST = 0,
+  TREE_SEARCH_NORMAL = 1,
+  TREE_SEARCH_EXHAUSTIVE = 2,
+};
+
 struct LoadedAlignment {
   std::unique_ptr<cmaple::Alignment> alignment;
   bool effective;
@@ -726,14 +738,44 @@ std::string sprtaNexusToSupportNewick(const std::string& nexus) {
   return tree;
 }
 
+cmaple::ModelBase::SubModel toCmapleSubstitutionModel(
+    const int substitution_model) {
+  switch (substitution_model) {
+    case SUBSTITUTION_MODEL_JC:
+      return cmaple::ModelBase::JC;
+    case SUBSTITUTION_MODEL_UNREST:
+      return cmaple::ModelBase::UNREST;
+    case SUBSTITUTION_MODEL_GTR:
+    default:
+      return cmaple::ModelBase::GTR;
+  }
+}
+
+std::string substitutionModelName(const int substitution_model) {
+  switch (substitution_model) {
+    case SUBSTITUTION_MODEL_JC:
+      return "JC";
+    case SUBSTITUTION_MODEL_UNREST:
+      return "UNREST";
+    case SUBSTITUTION_MODEL_GTR:
+    default:
+      return "GTR";
+  }
+}
+
 std::string inferAlignment(cmaple::Alignment& alignment,
                            int num_threads,
+                           int substitution_model,
                            int branch_support_method,
                            int branch_support_replicates,
                            double branch_support_epsilon,
                            int filter_divergent_samples,
                            double max_divergence_percent,
-                           const ConstantSiteCounts& constant_sites) {
+                           const ConstantSiteCounts& constant_sites,
+                           const unsigned char* tree_data,
+                           const unsigned int tree_size,
+                           const int branch_lengths_fixed,
+                           const int tree_search_mode) {
   unsigned int removed_samples = 0;
   std::unique_ptr<ScopedAlignmentQualityFilter> scoped_filter;
 
@@ -774,17 +816,39 @@ std::string inferAlignment(cmaple::Alignment& alignment,
   }
 
   const bool effective = cmaple::isEffective(alignment);
-  cmaple::Model model(cmaple::ModelBase::GTR, cmaple::SeqRegion::SEQ_DNA);
-  cmaple::Tree tree(&alignment, &model);
+  cmaple::Model model(toCmapleSubstitutionModel(substitution_model),
+                      cmaple::SeqRegion::SEQ_DNA);
+  std::cout << "Substitution model: "
+            << substitutionModelName(substitution_model) << std::endl;
+  std::unique_ptr<cmaple::Tree> tree;
+  if (tree_data != nullptr && tree_size > 0) {
+    const std::string_view tree_text = trimAlignmentBytes(tree_data, tree_size);
+    if (tree_text.empty()) {
+      return errorJson("Reference tree file is empty.");
+    }
+
+    MemoryInputBuffer tree_buffer(tree_text);
+    std::istream tree_stream(&tree_buffer);
+    tree = std::make_unique<cmaple::Tree>(
+        &alignment, &model, tree_stream, branch_lengths_fixed != 0);
+    std::cout << "Reference tree: loaded";
+    if (branch_lengths_fixed != 0) {
+      std::cout << " with fixed branch lengths";
+    }
+    std::cout << std::endl;
+  } else {
+    tree = std::make_unique<cmaple::Tree>(&alignment, &model);
+    std::cout << "Reference tree: none" << std::endl;
+  }
   if (branch_support_method != BRANCH_SUPPORT_NONE &&
       branch_support_method != BRANCH_SUPPORT_SPRTA &&
       branch_support_method != BRANCH_SUPPORT_SH_ALRT) {
     branch_support_method = BRANCH_SUPPORT_NONE;
   }
   const bool compute_sprta = branch_support_method == BRANCH_SUPPORT_SPRTA;
-  if (compute_sprta && tree.params) {
-    tree.params->compute_SPRTA_zero_length_branches = true;
-    tree.params->print_SPRTA_less_info_seqs = true;
+  if (compute_sprta && tree->params) {
+    tree->params->compute_SPRTA_zero_length_branches = true;
+    tree->params->print_SPRTA_less_info_seqs = true;
   }
   if (branch_support_method == BRANCH_SUPPORT_SPRTA) {
     std::cout << "Branch support: SPRTA" << std::endl;
@@ -795,15 +859,29 @@ std::string inferAlignment(cmaple::Alignment& alignment,
   } else {
     std::cout << "Branch support: off" << std::endl;
   }
+  cmaple::Tree::TreeSearchType selected_tree_search =
+      cmaple::Tree::NORMAL_TREE_SEARCH;
+  if (tree_search_mode == TREE_SEARCH_FAST) {
+    selected_tree_search = cmaple::Tree::FAST_TREE_SEARCH;
+  } else if (tree_search_mode == TREE_SEARCH_EXHAUSTIVE) {
+    selected_tree_search = cmaple::Tree::EXHAUSTIVE_TREE_SEARCH;
+  }
+  std::cout << "Tree search: "
+            << (selected_tree_search == cmaple::Tree::FAST_TREE_SEARCH
+                    ? "FAST"
+                    : selected_tree_search == cmaple::Tree::EXHAUSTIVE_TREE_SEARCH
+                          ? "EXHAUSTIVE"
+                          : "NORMAL")
+            << std::endl;
 
   double phase_started_ms = nowMs();
   if (compute_sprta) {
     std::cout << "Computing SPRTA supports" << std::endl;
   }
   const int inference_threads = 1;
-  tree.infer(inference_threads,
+  tree->infer(inference_threads,
              compute_sprta ? cmaple::Tree::EXHAUSTIVE_TREE_SEARCH
-                            : cmaple::Tree::NORMAL_TREE_SEARCH,
+                            : selected_tree_search,
              false,
              compute_sprta);
   profileLog("treeInfer", nowMs() - phase_started_ms);
@@ -811,25 +889,25 @@ std::string inferAlignment(cmaple::Alignment& alignment,
   if (!compute_sprta && branch_support_method == BRANCH_SUPPORT_SH_ALRT &&
       branch_support_replicates > 0) {
     phase_started_ms = nowMs();
-    tree.computeBranchSupport(num_threads, branch_support_replicates, branch_support_epsilon);
+    tree->computeBranchSupport(num_threads, branch_support_replicates, branch_support_epsilon);
     profileLog("branchSupport", nowMs() - phase_started_ms);
   }
 
   phase_started_ms = nowMs();
-  const double log_likelihood = tree.computeLh();
+  const double log_likelihood = tree->computeLh();
   profileLog("computeLh", nowMs() - phase_started_ms);
 
   phase_started_ms = nowMs();
   std::string newick;
   if (compute_sprta) {
     const std::string nexus =
-        tree.exportNexus(cmaple::Tree::BIN_TREE, true, false);
+        tree->exportNexus(cmaple::Tree::BIN_TREE, true, false);
     newick = sprtaNexusToSupportNewick(nexus);
     if (newick.empty()) {
-      newick = tree.exportNewick(cmaple::Tree::BIN_TREE, false, true);
+      newick = tree->exportNewick(cmaple::Tree::BIN_TREE, false, true);
     }
   } else {
-    newick = tree.exportNewick(cmaple::Tree::BIN_TREE, false, true);
+    newick = tree->exportNewick(cmaple::Tree::BIN_TREE, false, true);
   }
   profileLog("exportNewick", nowMs() - phase_started_ms);
 
@@ -962,6 +1040,7 @@ extern "C" char* cmaple_infer(const unsigned char* data,
                                unsigned int size,
                                int format,
                                int num_threads,
+                               int substitution_model,
                                int branch_support_method,
                                int branch_support_replicates,
                                double branch_support_epsilon,
@@ -970,7 +1049,11 @@ extern "C" char* cmaple_infer(const unsigned char* data,
                                unsigned int constant_a,
                                unsigned int constant_c,
                                unsigned int constant_g,
-                               unsigned int constant_t) {
+                               unsigned int constant_t,
+                               const unsigned char* tree_data,
+                               unsigned int tree_size,
+                               int branch_lengths_fixed,
+                               int tree_search_mode) {
   try {
     if (data == nullptr || size == 0) {
       return copyResult(errorJson("Alignment file is empty."));
@@ -986,12 +1069,17 @@ extern "C" char* cmaple_infer(const unsigned char* data,
         constant_a, constant_c, constant_g, constant_t};
     return copyResult(inferAlignment(*alignment,
                                      num_threads,
+                                     substitution_model,
                                      branch_support_method,
                                      branch_support_replicates,
                                      branch_support_epsilon,
                                      filter_divergent_samples,
                                      max_divergence_percent,
-                                     constant_sites));
+                                     constant_sites,
+                                     tree_data,
+                                     tree_size,
+                                     branch_lengths_fixed,
+                                     tree_search_mode));
   } catch (const std::exception& err) {
     return copyResult(errorJson(err.what()));
   } catch (...) {
@@ -1028,6 +1116,7 @@ extern "C" char* cmaple_analyze(const unsigned char* data,
 
 extern "C" char* cmaple_infer_loaded(unsigned int handle,
                                       int num_threads,
+                                      int substitution_model,
                                       int branch_support_method,
                                       int branch_support_replicates,
                                       double branch_support_epsilon,
@@ -1036,7 +1125,11 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle,
                                       unsigned int constant_a,
                                       unsigned int constant_c,
                                       unsigned int constant_g,
-                                      unsigned int constant_t) {
+                                      unsigned int constant_t,
+                                      const unsigned char* tree_data,
+                                      unsigned int tree_size,
+                                      int branch_lengths_fixed,
+                                      int tree_search_mode) {
   try {
     auto loaded = loaded_alignments.find(handle);
     if (loaded == loaded_alignments.end()) {
@@ -1053,12 +1146,17 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle,
         constant_a, constant_c, constant_g, constant_t};
     return copyResult(inferAlignment(alignment,
                                      num_threads,
+                                     substitution_model,
                                      branch_support_method,
                                      branch_support_replicates,
                                      branch_support_epsilon,
                                      filter_divergent_samples,
                                      max_divergence_percent,
-                                     constant_sites));
+                                     constant_sites,
+                                     tree_data,
+                                     tree_size,
+                                     branch_lengths_fixed,
+                                     tree_search_mode));
   } catch (const std::exception& err) {
     return copyResult(errorJson(err.what()));
   } catch (...) {

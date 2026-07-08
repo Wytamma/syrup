@@ -1,5 +1,7 @@
 export type AlignmentFormat = 'auto' | 'fasta' | 'phylip' | 'maple'
 export type BranchSupportMethod = 'none' | 'sprta' | 'sh-alrt'
+export type SubstitutionModel = 'GTR' | 'JC' | 'UNREST'
+export type TreeSearchType = 'fast' | 'normal' | 'exhaustive'
 
 export type AlignmentStats = {
   fileName: string
@@ -53,12 +55,16 @@ export type CmapleWorkerRequest =
       type: 'infer'
       id: string
       numThreads: number
+      substitutionModel: SubstitutionModel
       branchSupportMethod: BranchSupportMethod
       branchSupportReplicates: number
       branchSupportEpsilon: number
       filterDivergentSamples: boolean
       maxDivergencePercent: number
       constantSites: ConstantSiteCounts
+      referenceTreeText: string
+      branchLengthsFixed: boolean
+      treeSearchType: TreeSearchType
     }
   | {
       type: 'export-maple'

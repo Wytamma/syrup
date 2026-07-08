@@ -7,11 +7,16 @@
     BranchSupportMethod,
     ConstantSiteCounts,
     DivergenceSummary,
+    SubstitutionModel,
+    TreeSearchType,
   } from '../../types/cmaple'
   import type { AppState } from '../state/cmaple-app.svelte'
   import BranchSupportOption from './BranchSupportOption.svelte'
   import ConstantSitesOption from './ConstantSitesOption.svelte'
   import DivergenceQualityFilter from './DivergenceQualityFilter.svelte'
+  import ReferenceTreeOption from './ReferenceTreeOption.svelte'
+  import SubstitutionModelOption from './SubstitutionModelOption.svelte'
+  import TreeSearchOption from './TreeSearchOption.svelte'
 
   export let state: AppState
   export let selectedFile: File | null = null
@@ -27,6 +32,7 @@
   export let isExportingMaple = false
   export let numThreads = 1
   export let maxThreads = 1
+  export let substitutionModel: SubstitutionModel = 'GTR'
   export let branchSupportMethod: BranchSupportMethod = 'sprta'
   export let branchSupportReplicates = 1000
   export let branchSupportEpsilon = 0.1
@@ -35,6 +41,9 @@
   export let useConstantSites = false
   export let constantSites: ConstantSiteCounts = { a: 0, c: 0, g: 0, t: 0 }
   export let constantSitesText = ''
+  export let referenceTreeFileName = ''
+  export let branchLengthsFixed = false
+  export let treeSearchType: TreeSearchType = 'normal'
   export let activeConstantSites: ConstantSiteCounts = { a: 0, c: 0, g: 0, t: 0 }
   export let adjustedSequenceLength = 0
   export let crossOriginIsolated = false
@@ -43,6 +52,7 @@
   export let onDownloadMaple: () => void = () => {}
   export let onRunInference: () => void = () => {}
   export let onNumThreadsChange: (value: number) => void = () => {}
+  export let onSubstitutionModelChange: (value: SubstitutionModel) => void = () => {}
   export let onBranchSupportMethodChange: (value: BranchSupportMethod) => void = () => {}
   export let onBranchSupportReplicatesChange: (value: number) => void = () => {}
   export let onBranchSupportEpsilonChange: (value: number) => void = () => {}
@@ -50,6 +60,9 @@
   export let onConstantSiteTextCommit: (value: string) => void = () => {}
   export let onFormattedConstantSiteTextChange: (value: string) => void = () => {}
   export let onUseConstantSitesChange: (enabled: boolean) => void = () => {}
+  export let onReferenceTreeFileChange: (file: File | null) => void = () => {}
+  export let onBranchLengthsFixedChange: (enabled: boolean) => void = () => {}
+  export let onTreeSearchTypeChange: (value: TreeSearchType) => void = () => {}
   export let onFilterDivergentSamplesChange: (enabled: boolean) => void = () => {}
   export let onMaxDivergencePercentChange: (value: number) => void = () => {}
 
@@ -155,6 +168,11 @@
       {/if}
 
       <div class="options run-options">
+        <SubstitutionModelOption
+          value={substitutionModel}
+          disabled={state === 'running'}
+          onChange={onSubstitutionModelChange}
+        />
         <BranchSupportOption
           method={branchSupportMethod}
           replicates={branchSupportReplicates}
@@ -174,6 +192,18 @@
         <summary>Advanced Options</summary>
         {#if advancedOptionsOpen}
           <div class="options">
+            <ReferenceTreeOption
+              fileName={referenceTreeFileName}
+              {branchLengthsFixed}
+              disabled={state === 'running'}
+              onFileChange={onReferenceTreeFileChange}
+              onBranchLengthsFixedChange={onBranchLengthsFixedChange}
+            />
+            <TreeSearchOption
+              value={treeSearchType}
+              disabled={state === 'running'}
+              onChange={onTreeSearchTypeChange}
+            />
             <ConstantSitesOption
               text={constantSitesText}
               {constantSites}

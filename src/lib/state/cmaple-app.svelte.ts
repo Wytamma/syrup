@@ -19,6 +19,8 @@ import type {
   CmapleWorkerResponse,
   ConstantSiteCounts,
   DivergenceSummary,
+  SubstitutionModel,
+  TreeSearchType,
 } from '../../types/cmaple'
 
 export type AppState = 'idle' | 'preflight' | 'ready' | 'running' | 'done' | 'error'
@@ -59,6 +61,7 @@ export function createCmapleApp() {
     isExportingMaple: false,
     numThreads: 1,
     maxThreads: Math.max(1, navigator.hardwareConcurrency || 1),
+    substitutionModel: 'GTR' as SubstitutionModel,
     branchSupportMethod: 'sprta' as BranchSupportMethod,
     branchSupportReplicates: 1000,
     branchSupportEpsilon: 0.1,
@@ -67,6 +70,10 @@ export function createCmapleApp() {
     useConstantSites: false,
     constantSites: { a: 0, c: 0, g: 0, t: 0 } as ConstantSiteCounts,
     constantSitesText: formatConstantSites(ZERO_CONSTANT_SITES),
+    referenceTreeFileName: '',
+    referenceTreeText: '',
+    branchLengthsFixed: false,
+    treeSearchType: 'normal' as TreeSearchType,
 
     get divergence() {
       app.divergenceVersion
@@ -82,6 +89,7 @@ export function createCmapleApp() {
     loadAlignmentFromQueryParam,
     requestWarningSummary,
     setNumThreads,
+    setSubstitutionModel,
     setBranchSupportMethod,
     setBranchSupportReplicates,
     setBranchSupportEpsilon,
@@ -90,6 +98,9 @@ export function createCmapleApp() {
     setConstantSiteCountsFromText,
     setConstantSitesText,
     setUseConstantSites,
+    setReferenceTreeFile,
+    setBranchLengthsFixed,
+    setTreeSearchType,
     clearCurrent,
     loadAlignmentFromUrl,
     loadFile,
@@ -178,6 +189,10 @@ export function createCmapleApp() {
     app.numThreads = Math.max(1, Math.min(app.maxThreads, Math.floor(Number(value) || 1)))
   }
 
+  function setSubstitutionModel(value: SubstitutionModel) {
+    app.substitutionModel = value
+  }
+
   function setBranchSupportMethod(value: BranchSupportMethod) {
     app.branchSupportMethod = value
   }
@@ -225,6 +240,34 @@ export function createCmapleApp() {
     if (app.filterDivergentSamples) requestWarningSummary()
   }
 
+  async function setReferenceTreeFile(file: File | null) {
+    if (!file) {
+      app.referenceTreeFileName = ''
+      app.referenceTreeText = ''
+      app.branchLengthsFixed = false
+      return
+    }
+
+    try {
+      app.referenceTreeFileName = file.name
+      app.referenceTreeText = await file.text()
+      app.error = ''
+    } catch (err) {
+      app.referenceTreeFileName = ''
+      app.referenceTreeText = ''
+      app.branchLengthsFixed = false
+      app.error = err instanceof Error ? err.message : 'Could not read the selected tree file.'
+    }
+  }
+
+  function setBranchLengthsFixed(value: boolean) {
+    app.branchLengthsFixed = value && !!app.referenceTreeText
+  }
+
+  function setTreeSearchType(value: TreeSearchType) {
+    app.treeSearchType = value
+  }
+
   function clearCurrent() {
     if (app.currentId) {
       worker?.postMessage({ type: 'clear', id: app.currentId })
@@ -244,6 +287,10 @@ export function createCmapleApp() {
     app.useConstantSites = false
     app.constantSites = { a: 0, c: 0, g: 0, t: 0 }
     app.constantSitesText = formatConstantSites(app.constantSites)
+    app.referenceTreeFileName = ''
+    app.referenceTreeText = ''
+    app.branchLengthsFixed = false
+    app.treeSearchType = 'normal'
     app.logs = []
     app.newick = ''
     app.logLikelihood = null
@@ -311,6 +358,10 @@ export function createCmapleApp() {
     app.useConstantSites = false
     app.constantSites = { a: 0, c: 0, g: 0, t: 0 }
     app.constantSitesText = formatConstantSites(app.constantSites)
+    app.referenceTreeFileName = ''
+    app.referenceTreeText = ''
+    app.branchLengthsFixed = false
+    app.treeSearchType = 'normal'
     app.logs = []
     pendingLogLines = []
     if (logFlushId !== null) {
@@ -363,12 +414,16 @@ export function createCmapleApp() {
       type: 'infer',
       id: app.currentId,
       numThreads: app.numThreads,
+      substitutionModel: app.substitutionModel,
       branchSupportMethod: app.branchSupportMethod,
       branchSupportReplicates: app.branchSupportReplicates,
       branchSupportEpsilon: app.branchSupportEpsilon,
       filterDivergentSamples: app.filterDivergentSamples,
       maxDivergencePercent: app.maxDivergencePercent,
       constantSites: sanitizeConstantSites(app.activeConstantSites),
+      referenceTreeText: app.referenceTreeText,
+      branchLengthsFixed: app.branchLengthsFixed,
+      treeSearchType: app.treeSearchType,
     })
   }
 
