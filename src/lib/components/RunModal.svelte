@@ -103,28 +103,6 @@
       {/if}
     </div>
 
-    <div class="file-line">
-      <div class="file-details">
-        <strong>{fileName}</strong>
-        {#if state !== 'preflight' && state !== 'running'}
-          <a
-            href="/"
-            class="text-link"
-            aria-disabled={isExportingMaple}
-            onclick={(event) => {
-              event.preventDefault()
-              if (!isExportingMaple) onDownloadMaple()
-            }}
-          >
-            {isExportingMaple ? 'Preparing MAPLE...' : 'Download MAPLE format'}
-          </a>
-        {/if}
-      </div>
-      {#if selectedFile}
-        <span class="file-size">{formatFileSize(selectedFile.size)}</span>
-      {/if}
-    </div>
-
     {#if state === 'preflight'}
       <div class="loading">
         <span>Parsing alignment and checking CMAPLE effectiveness.</span>
@@ -136,6 +114,49 @@
         <button type="button" onclick={onChooseAnother}>Choose another file</button>
       </div>
     {:else}
+      {#if error}
+        <div class="error" role="alert">{error}</div>
+      {/if}
+
+      {#if !error && effectiveStatus === false}
+        <div class="warning" role="alert">
+          This data is likely not suitable for analysis with CMAPLE.
+        </div>
+      {/if}
+
+      {#if !error && referenceTreeFileName}
+        <div class="notice">
+          New samples from <strong>{fileName || 'the input alignment'}</strong> will be placed on the
+          <strong>{referenceTreeFileName}</strong> reference tree
+        </div>
+      {/if}
+
+      {#if !error && displayedWarnings.length}
+        <div class="warning">{displayedWarnings.join(' ')}</div>
+      {/if}
+
+      <div class="file-line">
+        <div class="file-details">
+          <strong>{fileName}</strong>
+          {#if state !== 'running'}
+            <a
+              href="/"
+              class="text-link"
+              aria-disabled={isExportingMaple}
+              onclick={(event) => {
+                event.preventDefault()
+                if (!isExportingMaple) onDownloadMaple()
+              }}
+            >
+              {isExportingMaple ? 'Preparing MAPLE...' : 'Download MAPLE format'}
+            </a>
+          {/if}
+        </div>
+        {#if selectedFile}
+          <span class="file-size">{formatFileSize(selectedFile.size)}</span>
+        {/if}
+      </div>
+
       {#if stats}
         <div class="stats-grid">
           <div>
@@ -155,27 +176,6 @@
             <strong>{effectiveStatus === null ? '-' : effectiveStatus ? 'Yes' : 'No'}</strong>
           </div>
         </div>
-      {/if}
-
-      {#if error}
-        <div class="error" role="alert">{error}</div>
-      {/if}
-
-      {#if effectiveStatus === false}
-        <div class="warning" role="alert">
-          This data is likely not suitable for analysis with CMAPLE.
-        </div>
-      {/if}
-
-      {#if referenceTreeFileName}
-        <div class="notice">
-          New samples from <strong>{fileName || 'the input alignment'}</strong> will be placed on the
-          <strong>{referenceTreeFileName}</strong> reference tree
-        </div>
-      {/if}
-
-      {#if displayedWarnings.length}
-        <div class="warning">{displayedWarnings.join(' ')}</div>
       {/if}
 
       <div class="options run-options">
