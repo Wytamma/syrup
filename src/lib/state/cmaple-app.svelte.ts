@@ -27,6 +27,8 @@ import type {
 export type AppState = 'idle' | 'preflight' | 'ready' | 'running' | 'done' | 'error'
 
 const ALIGNMENT_QUERY_PARAM = 'alignment'
+const REFERENCE_TREE_QUERY_PARAMS = ['referenceTree', 'refTree', 'tree']
+const REFERENCE_ALIGNMENT_QUERY_PARAMS = ['referenceAlignment', 'refAlignment', 'refAln']
 const DNA_MODELS: SubstitutionModel[] = ['GTR', 'JC', 'UNREST']
 const PROTEIN_MODELS: SubstitutionModel[] = [
   'LG',
@@ -172,10 +174,36 @@ export function createCmapleApp() {
     worker = null
   }
 
-  function loadAlignmentFromQueryParam() {
+  function getFirstQueryParam(params: URLSearchParams, names: string[]) {
+    for (const name of names) {
+      const value = params.get(name)
+      if (value) return value
+    }
+    return ''
+  }
+
+  async function loadAlignmentFromQueryParam() {
     if (typeof window === 'undefined') return
-    const alignmentUrl = new URLSearchParams(window.location.search).get(ALIGNMENT_QUERY_PARAM)
-    if (alignmentUrl) void loadAlignmentFromUrl(alignmentUrl)
+    const params = new URLSearchParams(window.location.search)
+    const alignmentUrl = params.get(ALIGNMENT_QUERY_PARAM)
+    const referenceTreeUrl = getFirstQueryParam(params, REFERENCE_TREE_QUERY_PARAMS)
+    const referenceAlignmentUrl = getFirstQueryParam(params, REFERENCE_ALIGNMENT_QUERY_PARAMS)
+    if (!alignmentUrl) return
+
+    try {
+      const [referenceTreeFile, referenceAlignmentFile] = await Promise.all([
+        referenceTreeUrl ? downloadTextFileFromUrl(referenceTreeUrl, 'reference-tree.nwk') : Promise.resolve(null),
+        referenceAlignmentUrl ? downloadTextFileFromUrl(referenceAlignmentUrl, 'reference-alignment.maple') : Promise.resolve(null),
+      ])
+
+      if (referenceTreeFile) await setReferenceTreeFile(referenceTreeFile)
+      if (referenceAlignmentFile) await setReferenceAlignmentFile(referenceAlignmentFile)
+      await loadAlignmentFromUrl(alignmentUrl)
+    } catch (err) {
+      app.error = err instanceof Error ? err.message : 'Could not download files from the URL parameters.'
+      app.logs = []
+      app.state = 'error'
+    }
   }
 
   function requestWarningSummary() {
@@ -191,6 +219,11 @@ export function createCmapleApp() {
   }
 
   function refreshEffectiveStatus() {
+    if (app.referenceAlignmentText) {
+      app.effectiveStatus = null
+      return
+    }
+
     app.effectiveStatus = getEffectiveStatus(
       app.stats,
       getAdjustedDivergence(app.divergence, app.stats, getActiveConstantSites()),
@@ -209,7 +242,7 @@ export function createCmapleApp() {
       return
     }
 
-    app.displayedWarnings = getDisplayedWarnings(
+    const warnings = getDisplayedWarnings(
       app.stats,
       app.filterDivergentSamples,
       app.divergence,
@@ -218,6 +251,12 @@ export function createCmapleApp() {
       app.maxDivergencePercent,
       getActiveConstantSites(),
     )
+    app.displayedWarnings = app.referenceTreeText
+      ? [
+          `New samples from ${app.fileName || 'the input alignment'} will be placed on the ${app.referenceTreeFileName || 'selected'} reference tree.`,
+          ...warnings,
+        ]
+      : warnings
   }
 
   function refreshDerivedAlignmentState() {
@@ -293,6 +332,7 @@ export function createCmapleApp() {
       app.referenceAlignmentText = ''
       app.branchLengthsFixed = false
       app.noReroot = false
+      refreshDerivedAlignmentState()
       return
     }
 
@@ -302,6 +342,7 @@ export function createCmapleApp() {
       app.referenceAlignmentFileName = ''
       app.referenceAlignmentText = ''
       app.error = ''
+      refreshDerivedAlignmentState()
     } catch (err) {
       app.referenceTreeFileName = ''
       app.referenceTreeText = ''
@@ -310,6 +351,7 @@ export function createCmapleApp() {
       app.branchLengthsFixed = false
       app.noReroot = false
       app.error = err instanceof Error ? err.message : 'Could not read the selected tree file.'
+      refreshDerivedAlignmentState()
     }
   }
 
@@ -317,6 +359,7 @@ export function createCmapleApp() {
     if (!file || !app.referenceTreeText) {
       app.referenceAlignmentFileName = ''
       app.referenceAlignmentText = ''
+      refreshDerivedAlignmentState()
       return
     }
 
@@ -324,10 +367,12 @@ export function createCmapleApp() {
       app.referenceAlignmentFileName = file.name
       app.referenceAlignmentText = await file.text()
       app.error = ''
+      refreshDerivedAlignmentState()
     } catch (err) {
       app.referenceAlignmentFileName = ''
       app.referenceAlignmentText = ''
       app.error = err instanceof Error ? err.message : 'Could not read the selected reference alignment file.'
+      refreshDerivedAlignmentState()
     }
   }
 
@@ -407,21 +452,12 @@ export function createCmapleApp() {
     const trimmedUrl = url.trim()
     if (!trimmedUrl) return
 
-    const fallbackName = getAlignmentFileNameFromUrl(trimmedUrl)
+    const fallbackName = getFileNameFromUrl(trimmedUrl, 'alignment.fa')
 
     try {
       app.logs = [`Downloading alignment from ${trimmedUrl}`]
 
-      const response = await fetch(trimmedUrl)
-      if (!response.ok) {
-        throw new Error(`Could not download alignment (${response.status} ${response.statusText}).`)
-      }
-
-      const blob = await response.blob()
-      const file = new File([blob], fallbackName, {
-        type: blob.type || 'text/plain',
-      })
-
+      const file = await downloadTextFileFromUrl(trimmedUrl, fallbackName)
       await loadFile(file)
     } catch (err) {
       app.selectedFile = null
@@ -447,16 +483,6 @@ export function createCmapleApp() {
     app.effectiveStatus = null
     app.warnings = []
     app.displayedWarnings = []
-    app.useConstantSites = false
-    app.constantSites = { a: 0, c: 0, g: 0, t: 0 }
-    app.constantSitesText = formatConstantSites(app.constantSites)
-    app.referenceTreeFileName = ''
-    app.referenceTreeText = ''
-    app.referenceAlignmentFileName = ''
-    app.referenceAlignmentText = ''
-    app.branchLengthsFixed = false
-    app.noReroot = false
-    app.treeSearchType = 'normal'
     app.logs = []
     pendingLogLines = []
     if (logFlushId !== null) {
@@ -580,17 +606,35 @@ export function createCmapleApp() {
     return app.useConstantSites ? app.constantSites : ZERO_CONSTANT_SITES
   }
 
-  function getAlignmentFileNameFromUrl(url: string) {
+  async function downloadTextFileFromUrl(url: string, fallbackName: string) {
+    const trimmedUrl = url.trim()
+    const response = await fetch(trimmedUrl)
+    const fileName = getFileNameFromUrl(trimmedUrl, fallbackName)
+    if (!response.ok) {
+      throw new Error(`Could not download ${fileName} (${response.status} ${response.statusText}).`)
+    }
+
+    const text = await response.text()
+    if (/^\s*<!doctype\s+html/i.test(text) || /^\s*<html[\s>]/i.test(text)) {
+      throw new Error(`${fileName} did not return an alignment or tree file. Check the URL path.`)
+    }
+
+    return new File([text], fileName, {
+      type: response.headers.get('content-type') || 'text/plain',
+    })
+  }
+
+  function getFileNameFromUrl(url: string, fallbackName: string) {
     try {
       if (url.startsWith('http') || url.startsWith('ftp')) {
         const parsedUrl = new URL(url)
         const fromPath = parsedUrl.pathname.split('/').filter(Boolean).at(-1)
-        return fromPath || 'alignment.fa'
+        return fromPath || fallbackName
       }
       const fromPath = url.split('/').filter(Boolean).at(-1)
-      return fromPath || 'alignment.fa'
+      return fromPath || fallbackName
     } catch {
-      return 'alignment.fa'
+      return fallbackName
     }
   }
 

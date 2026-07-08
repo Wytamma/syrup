@@ -7,11 +7,19 @@
   export let app: CmapleAppController
   export let theme: ThemeMode = 'dark'
   export let onToggleTheme: () => void = () => {}
+
+  $: placedSampleNames = app.referenceTreeText && app.referenceAlignmentText ? (app.stats?.sampleNames ?? []) : []
 </script>
 
 <AppTopbar {theme} fixed={true} onToggleTheme={onToggleTheme} />
 
-<TreeViewer newick={app.newick} {theme} showInternalLabels={app.showInternalLabels} showLeafLabels={app.showLeafLabels} />
+<TreeViewer
+  newick={app.newick}
+  {theme}
+  {placedSampleNames}
+  showInternalLabels={app.showInternalLabels}
+  showLeafLabels={app.showLeafLabels}
+/>
 <div class="tree-dock">
   <div class="tree-toolbar">
     <div>

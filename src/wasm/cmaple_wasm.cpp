@@ -641,6 +641,12 @@ std::string preflightJson(const cmaple::Alignment& alignment,
       << "\"fileSize\":" << file_size << ","
       << "\"format\":\"" << formatName(alignment.aln_format) << "\","
       << "\"sequenceType\":\"" << sequenceTypeName(alignment.getSeqType()) << "\","
+      << "\"sampleNames\":[";
+  for (std::size_t index = 0; index < alignment.data.size(); ++index) {
+    if (index > 0) out << ",";
+    out << "\"" << jsonEscape(alignment.data[index].seq_name) << "\"";
+  }
+  out << "],"
       << "\"sequenceCount\":" << alignment.data.size() << ","
       << "\"sequenceLength\":" << alignment.ref_seq.size()
       << "},"
@@ -820,7 +826,7 @@ class ScopedReferenceAlignmentMerge {
                                   alignment.getSeqType());
     if (reference_alignment->ref_seq != alignment.ref_seq) {
       throw std::invalid_argument(
-          "Reference alignment must use the same reference sequence as the input alignment.");
+          "Input alignment must use the same reference sequence as the reference alignment.");
     }
 
     std::unordered_set<std::string> existing_names;

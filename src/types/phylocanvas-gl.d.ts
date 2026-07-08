@@ -12,6 +12,15 @@ declare module '@phylocanvas/phylocanvas.gl' {
     fillColour?: [number, number, number, number]
     strokeColour?: [number, number, number, number]
     fontColour?: [number, number, number, number]
+    styles?: Record<
+      string,
+      {
+        fillColour?: string | [number, number, number] | [number, number, number, number]
+        strokeColour?: string | [number, number, number] | [number, number, number, number]
+        label?: string
+        shape?: unknown
+      }
+    >
   }
 
   export type PhylocanvasModule = {

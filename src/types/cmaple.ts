@@ -48,6 +48,7 @@ export type AlignmentStats = {
   fileSize: number
   format: AlignmentFormat
   sequenceType: SequenceType
+  sampleNames: string[]
   sequenceCount: number
   sequenceLength: number
 }

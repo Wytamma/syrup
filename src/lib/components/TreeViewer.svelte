@@ -5,6 +5,7 @@
 
   export let newick: string
   export let theme: 'dark' | 'light' = 'dark'
+  export let placedSampleNames: string[] = []
   export let showInternalLabels = false
   export let showLeafLabels = true
 
@@ -52,6 +53,24 @@
     }
   }
 
+  function getAccentColour() {
+    if (!container) return theme === 'dark' ? '#ff981f' : '#d87905'
+    return getComputedStyle(container).getPropertyValue('--accent').trim() || (theme === 'dark' ? '#ff981f' : '#d87905')
+  }
+
+  function getPlacedSampleStyles(): PhylocanvasOptions['styles'] {
+    const accent = getAccentColour()
+    return Object.fromEntries(
+      placedSampleNames.filter(Boolean).map((name) => [
+        name,
+        {
+          fillColour: accent,
+          strokeColour: accent,
+        },
+      ]),
+    )
+  }
+
   function getTreeOptions(): PhylocanvasOptions | null {
     if (!container || !newick) return null
 
@@ -64,6 +83,7 @@
       showLeafLabels,
       interactive: true,
       nodeSize: 10,
+      styles: getPlacedSampleStyles(),
       ...getThemeOptions(),
     }
   }
@@ -107,7 +127,7 @@
     window.addEventListener('resize', handleResize)
   })
 
-  $: if (container && newick && theme !== undefined && showInternalLabels !== undefined && showLeafLabels !== undefined) {
+  $: if (container && newick && theme !== undefined && placedSampleNames !== undefined && showInternalLabels !== undefined && showLeafLabels !== undefined) {
     render()
   }
 

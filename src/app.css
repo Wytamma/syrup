@@ -16,6 +16,8 @@
   --accent: #ff981f;
   --button-hover: #ff8d24;
   --accent-soft: rgb(255 152 31 / 0.16);
+  --warning: #f2c86b;
+  --warning-bg: rgb(242 200 107 / 0.14);
   --danger: #ff9a9a;
   --danger-bg: rgb(255 116 116 / 0.12);
   --shadow: 0 24px 70px rgb(0 0 0 / 0.38);
@@ -41,6 +43,8 @@
   --accent: #d87905;
   --button-hover: #ff8d24;
   --accent-soft: rgb(216 121 5 / 0.12);
+  --warning: #8b6400;
+  --warning-bg: rgb(255 196 77 / 0.16);
   --danger: #9f1f1f;
   --danger-bg: rgb(214 68 68 / 0.09);
   --shadow: 0 24px 60px rgb(32 33 36 / 0.14);
@@ -552,16 +556,17 @@ h1 {
 }
 
 .warning {
-  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
-  background: var(--danger-bg);
-  color: var(--danger);
-  font-weight: 700;
+  border: 1px solid color-mix(in srgb, var(--warning) 55%, transparent);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-weight: 400;
 }
 
 .error {
   border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
   background: var(--danger-bg);
   color: var(--danger);
+  font-weight: 700;
 }
 
 .options {

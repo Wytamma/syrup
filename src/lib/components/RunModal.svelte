@@ -152,7 +152,7 @@
           </div>
           <div>
             <span>CMAPLE effective</span>
-            <strong>{effectiveStatus ? 'Yes' : 'No'}</strong>
+            <strong>{effectiveStatus === null ? '-' : effectiveStatus ? 'Yes' : 'No'}</strong>
           </div>
         </div>
       {/if}
