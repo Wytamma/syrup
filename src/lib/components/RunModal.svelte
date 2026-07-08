@@ -43,6 +43,7 @@
   export let constantSitesText = ''
   export let referenceTreeFileName = ''
   export let branchLengthsFixed = false
+  export let noReroot = false
   export let treeSearchType: TreeSearchType = 'normal'
   export let activeConstantSites: ConstantSiteCounts = { a: 0, c: 0, g: 0, t: 0 }
   export let adjustedSequenceLength = 0
@@ -62,6 +63,7 @@
   export let onUseConstantSitesChange: (enabled: boolean) => void = () => {}
   export let onReferenceTreeFileChange: (file: File | null) => void = () => {}
   export let onBranchLengthsFixedChange: (enabled: boolean) => void = () => {}
+  export let onNoRerootChange: (enabled: boolean) => void = () => {}
   export let onTreeSearchTypeChange: (value: TreeSearchType) => void = () => {}
   export let onFilterDivergentSamplesChange: (enabled: boolean) => void = () => {}
   export let onMaxDivergencePercentChange: (value: number) => void = () => {}
@@ -170,6 +172,7 @@
       <div class="options run-options">
         <SubstitutionModelOption
           value={substitutionModel}
+          sequenceType={stats?.sequenceType ?? 'dna'}
           disabled={state === 'running'}
           onChange={onSubstitutionModelChange}
         />
@@ -195,9 +198,11 @@
             <ReferenceTreeOption
               fileName={referenceTreeFileName}
               {branchLengthsFixed}
+              {noReroot}
               disabled={state === 'running'}
               onFileChange={onReferenceTreeFileChange}
               onBranchLengthsFixedChange={onBranchLengthsFixedChange}
+              onNoRerootChange={onNoRerootChange}
             />
             <TreeSearchOption
               value={treeSearchType}
@@ -210,8 +215,8 @@
               {activeConstantSites}
               {adjustedSequenceLength}
               hasStats={!!stats}
-              enabled={useConstantSites}
-              disabled={state === 'running'}
+              enabled={(stats?.sequenceType ?? 'dna') === 'dna' && useConstantSites}
+              disabled={state === 'running' || stats?.sequenceType === 'protein'}
               onTextChange={onConstantSiteTextChange}
               onTextCommit={onConstantSiteTextCommit}
               onFormattedTextChange={onFormattedConstantSiteTextChange}

@@ -693,7 +693,13 @@ h1 {
   border-radius: 6px;
 }
 
-.reference-tree-blfix span {
+.reference-tree-flags {
+  display: grid;
+  gap: 8px;
+}
+
+.reference-tree-blfix span,
+.reference-tree-no-reroot span {
   color: var(--subtle);
 }
 

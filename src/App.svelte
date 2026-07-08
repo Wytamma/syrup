@@ -70,6 +70,7 @@
       constantSitesText={app.constantSitesText}
       referenceTreeFileName={app.referenceTreeFileName}
       branchLengthsFixed={app.branchLengthsFixed}
+      noReroot={app.noReroot}
       treeSearchType={app.treeSearchType}
       activeConstantSites={app.activeConstantSites}
       adjustedSequenceLength={app.adjustedSequenceLength}
@@ -89,6 +90,7 @@
       onUseConstantSitesChange={app.setUseConstantSites}
       onReferenceTreeFileChange={app.setReferenceTreeFile}
       onBranchLengthsFixedChange={app.setBranchLengthsFixed}
+      onNoRerootChange={app.setNoReroot}
       onTreeSearchTypeChange={app.setTreeSearchType}
       onFilterDivergentSamplesChange={app.setFilterDivergentSamples}
       onMaxDivergencePercentChange={app.setMaxDivergencePercent}

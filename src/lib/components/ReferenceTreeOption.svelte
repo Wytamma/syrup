@@ -1,9 +1,11 @@
 <script lang="ts">
   export let fileName = ''
   export let branchLengthsFixed = false
+  export let noReroot = false
   export let disabled = false
   export let onFileChange: (file: File | null) => void = () => {}
   export let onBranchLengthsFixedChange: (enabled: boolean) => void = () => {}
+  export let onNoRerootChange: (enabled: boolean) => void = () => {}
 
   let fileInput: HTMLInputElement | null = null
 
@@ -51,15 +53,27 @@
     {/if}
   </div>
   {#if fileName}
-    <label class="checkbox-option reference-tree-blfix">
-      <span>Branch lengths fixed</span>
-      <input
-        type="checkbox"
-        checked={branchLengthsFixed}
-        disabled={disabled}
-        onchange={(event) => onBranchLengthsFixedChange(event.currentTarget.checked)}
-        aria-label="Keep reference tree branch lengths fixed"
-      />
-    </label>
+    <div class="reference-tree-flags">
+      <label class="checkbox-option reference-tree-no-reroot">
+        <span>No reroot</span>
+        <input
+          type="checkbox"
+          checked={noReroot}
+          disabled={disabled}
+          onchange={(event) => onNoRerootChange(event.currentTarget.checked)}
+          aria-label="Do not reroot the reference tree"
+        />
+      </label>
+      <label class="checkbox-option reference-tree-blfix">
+        <span>Branch lengths fixed</span>
+        <input
+          type="checkbox"
+          checked={branchLengthsFixed}
+          disabled={disabled}
+          onchange={(event) => onBranchLengthsFixedChange(event.currentTarget.checked)}
+          aria-label="Keep reference tree branch lengths fixed"
+        />
+      </label>
+    </div>
   {/if}
 </div>

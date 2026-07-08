@@ -36,6 +36,42 @@ enum SubstitutionModel {
   SUBSTITUTION_MODEL_GTR = 0,
   SUBSTITUTION_MODEL_JC = 1,
   SUBSTITUTION_MODEL_UNREST = 2,
+  SUBSTITUTION_MODEL_GTR20 = 3,
+  SUBSTITUTION_MODEL_NONREV = 4,
+  SUBSTITUTION_MODEL_LG = 5,
+  SUBSTITUTION_MODEL_WAG = 6,
+  SUBSTITUTION_MODEL_JTT = 7,
+  SUBSTITUTION_MODEL_Q_PFAM = 8,
+  SUBSTITUTION_MODEL_Q_BIRD = 9,
+  SUBSTITUTION_MODEL_Q_MAMMAL = 10,
+  SUBSTITUTION_MODEL_Q_INSECT = 11,
+  SUBSTITUTION_MODEL_Q_PLANT = 12,
+  SUBSTITUTION_MODEL_Q_YEAST = 13,
+  SUBSTITUTION_MODEL_JTTDCMUT = 14,
+  SUBSTITUTION_MODEL_DCMUT = 15,
+  SUBSTITUTION_MODEL_VT = 16,
+  SUBSTITUTION_MODEL_PMB = 17,
+  SUBSTITUTION_MODEL_BLOSUM62 = 18,
+  SUBSTITUTION_MODEL_DAYHOFF = 19,
+  SUBSTITUTION_MODEL_MTREV = 20,
+  SUBSTITUTION_MODEL_MTART = 21,
+  SUBSTITUTION_MODEL_MTZOA = 22,
+  SUBSTITUTION_MODEL_MTMET = 23,
+  SUBSTITUTION_MODEL_MTVER = 24,
+  SUBSTITUTION_MODEL_MTINV = 25,
+  SUBSTITUTION_MODEL_MTMAM = 26,
+  SUBSTITUTION_MODEL_FLAVI = 27,
+  SUBSTITUTION_MODEL_HIVB = 28,
+  SUBSTITUTION_MODEL_HIVW = 29,
+  SUBSTITUTION_MODEL_FLU = 30,
+  SUBSTITUTION_MODEL_RTREV = 31,
+  SUBSTITUTION_MODEL_CPREV = 32,
+  SUBSTITUTION_MODEL_NQ_PFAM = 33,
+  SUBSTITUTION_MODEL_NQ_BIRD = 34,
+  SUBSTITUTION_MODEL_NQ_MAMMAL = 35,
+  SUBSTITUTION_MODEL_NQ_INSECT = 36,
+  SUBSTITUTION_MODEL_NQ_PLANT = 37,
+  SUBSTITUTION_MODEL_NQ_YEAST = 38,
 };
 
 enum TreeSearchMode {
@@ -273,6 +309,18 @@ std::string formatName(cmaple::Alignment::InputType format) {
   }
 }
 
+std::string sequenceTypeName(cmaple::SeqRegion::SeqType sequence_type) {
+  switch (sequence_type) {
+    case cmaple::SeqRegion::SEQ_PROTEIN:
+      return "protein";
+    case cmaple::SeqRegion::SEQ_DNA:
+    case cmaple::SeqRegion::SEQ_AUTO:
+    case cmaple::SeqRegion::SEQ_UNKNOWN:
+    default:
+      return "dna";
+  }
+}
+
 double sequenceQualityScore(const cmaple::Sequence& sequence,
                             const unsigned int sequence_length) {
   if (!sequence_length) return 0;
@@ -285,8 +333,13 @@ double sequenceQualityScore(const cmaple::Sequence& sequence,
   return impacted_sites / sequence_length;
 }
 
-bool isConcreteDnaState(const cmaple::StateType state) {
-  return state < 4;
+std::size_t concreteStateCount(const cmaple::Alignment& alignment) {
+  return alignment.getSeqType() == cmaple::SeqRegion::SEQ_PROTEIN ? 20 : 4;
+}
+
+bool isConcreteState(const cmaple::Alignment& alignment,
+                     const cmaple::StateType state) {
+  return state < concreteStateCount(alignment);
 }
 
 unsigned int totalConstantSites(const ConstantSiteCounts& counts) {
@@ -377,7 +430,8 @@ WarningSummary getWarningSummary(const cmaple::Alignment& alignment,
   if (summary.sequence_length == 0) return summary;
 
   const double max_score = max_divergence_percent / 100.0;
-  std::vector<unsigned int> base_counts(summary.sequence_length * 4, 0);
+  const std::size_t state_count = concreteStateCount(alignment);
+  std::vector<unsigned int> base_counts(summary.sequence_length * state_count, 0);
   double ambiguous_sites = 0;
 
   for (const auto& sequence : alignment.data) {
@@ -393,8 +447,8 @@ WarningSummary getWarningSummary(const cmaple::Alignment& alignment,
 
     for (unsigned int position = 0; position < summary.sequence_length; ++position) {
       const cmaple::StateType ref_state = stateAtReferencePosition(alignment, position);
-      if (isConcreteDnaState(ref_state)) {
-        ++base_counts[position * 4 + ref_state];
+      if (isConcreteState(alignment, ref_state)) {
+        ++base_counts[position * state_count + ref_state];
       } else {
         ++ambiguous_sites;
       }
@@ -407,15 +461,15 @@ WarningSummary getWarningSummary(const cmaple::Alignment& alignment,
       for (std::size_t offset = 0; offset < length; ++offset) {
         const unsigned int position = mutation.position + offset;
         const cmaple::StateType ref_state = stateAtReferencePosition(alignment, position);
-        if (isConcreteDnaState(ref_state)) {
-          unsigned int& ref_count = base_counts[position * 4 + ref_state];
+        if (isConcreteState(alignment, ref_state)) {
+          unsigned int& ref_count = base_counts[position * state_count + ref_state];
           if (ref_count > 0) --ref_count;
         } else if (ambiguous_sites > 0) {
           --ambiguous_sites;
         }
 
-        if (isConcreteDnaState(mutation.type)) {
-          ++base_counts[position * 4 + mutation.type];
+        if (isConcreteState(alignment, mutation.type)) {
+          ++base_counts[position * state_count + mutation.type];
         } else {
           ++ambiguous_sites;
         }
@@ -425,8 +479,8 @@ WarningSummary getWarningSummary(const cmaple::Alignment& alignment,
 
   for (unsigned int position = 0; position < summary.sequence_length; ++position) {
     unsigned int concrete_states = 0;
-    for (unsigned int state = 0; state < 4; ++state) {
-      if (base_counts[position * 4 + state] > 0) {
+    for (std::size_t state = 0; state < state_count; ++state) {
+      if (base_counts[position * state_count + state] > 0) {
         ++concrete_states;
       }
     }
@@ -599,6 +653,7 @@ std::string preflightJson(const cmaple::Alignment& alignment,
       << "\"fileName\":\"\","
       << "\"fileSize\":" << file_size << ","
       << "\"format\":\"" << formatName(alignment.aln_format) << "\","
+      << "\"sequenceType\":\"" << sequenceTypeName(alignment.getSeqType()) << "\","
       << "\"sequenceCount\":" << alignment.data.size() << ","
       << "\"sequenceLength\":" << alignment.ref_seq.size()
       << "},"
@@ -738,6 +793,24 @@ std::string sprtaNexusToSupportNewick(const std::string& nexus) {
   return tree;
 }
 
+bool isUnrecognizedCharacterError(const std::exception& err) {
+  return std::string_view(err.what()).find("Unrecognized character ") !=
+      std::string_view::npos;
+}
+
+std::unique_ptr<cmaple::Alignment> parseAlignmentWithSeqType(
+    std::string_view alignment_text,
+    const int format,
+    const cmaple::SeqRegion::SeqType sequence_type) {
+  MemoryInputBuffer alignment_buffer(alignment_text);
+  std::istream alignment_stream(&alignment_buffer);
+  return std::make_unique<cmaple::Alignment>(
+      alignment_stream,
+      "",
+      toCmapleFormat(format),
+      sequence_type);
+}
+
 cmaple::ModelBase::SubModel toCmapleSubstitutionModel(
     const int substitution_model) {
   switch (substitution_model) {
@@ -745,6 +818,78 @@ cmaple::ModelBase::SubModel toCmapleSubstitutionModel(
       return cmaple::ModelBase::JC;
     case SUBSTITUTION_MODEL_UNREST:
       return cmaple::ModelBase::UNREST;
+    case SUBSTITUTION_MODEL_GTR20:
+      return cmaple::ModelBase::GTR20;
+    case SUBSTITUTION_MODEL_NONREV:
+      return cmaple::ModelBase::NONREV;
+    case SUBSTITUTION_MODEL_LG:
+      return cmaple::ModelBase::LG;
+    case SUBSTITUTION_MODEL_WAG:
+      return cmaple::ModelBase::WAG;
+    case SUBSTITUTION_MODEL_JTT:
+      return cmaple::ModelBase::JTT;
+    case SUBSTITUTION_MODEL_Q_PFAM:
+      return cmaple::ModelBase::Q_PFAM;
+    case SUBSTITUTION_MODEL_Q_BIRD:
+      return cmaple::ModelBase::Q_BIRD;
+    case SUBSTITUTION_MODEL_Q_MAMMAL:
+      return cmaple::ModelBase::Q_MAMMAL;
+    case SUBSTITUTION_MODEL_Q_INSECT:
+      return cmaple::ModelBase::Q_INSECT;
+    case SUBSTITUTION_MODEL_Q_PLANT:
+      return cmaple::ModelBase::Q_PLANT;
+    case SUBSTITUTION_MODEL_Q_YEAST:
+      return cmaple::ModelBase::Q_YEAST;
+    case SUBSTITUTION_MODEL_JTTDCMUT:
+      return cmaple::ModelBase::JTTDCMUT;
+    case SUBSTITUTION_MODEL_DCMUT:
+      return cmaple::ModelBase::DCMUT;
+    case SUBSTITUTION_MODEL_VT:
+      return cmaple::ModelBase::VT;
+    case SUBSTITUTION_MODEL_PMB:
+      return cmaple::ModelBase::PMB;
+    case SUBSTITUTION_MODEL_BLOSUM62:
+      return cmaple::ModelBase::BLOSUM62;
+    case SUBSTITUTION_MODEL_DAYHOFF:
+      return cmaple::ModelBase::DAYHOFF;
+    case SUBSTITUTION_MODEL_MTREV:
+      return cmaple::ModelBase::MTREV;
+    case SUBSTITUTION_MODEL_MTART:
+      return cmaple::ModelBase::MTART;
+    case SUBSTITUTION_MODEL_MTZOA:
+      return cmaple::ModelBase::MTZOA;
+    case SUBSTITUTION_MODEL_MTMET:
+      return cmaple::ModelBase::MTMET;
+    case SUBSTITUTION_MODEL_MTVER:
+      return cmaple::ModelBase::MTVER;
+    case SUBSTITUTION_MODEL_MTINV:
+      return cmaple::ModelBase::MTINV;
+    case SUBSTITUTION_MODEL_MTMAM:
+      return cmaple::ModelBase::MTMAM;
+    case SUBSTITUTION_MODEL_FLAVI:
+      return cmaple::ModelBase::FLAVI;
+    case SUBSTITUTION_MODEL_HIVB:
+      return cmaple::ModelBase::HIVB;
+    case SUBSTITUTION_MODEL_HIVW:
+      return cmaple::ModelBase::HIVW;
+    case SUBSTITUTION_MODEL_FLU:
+      return cmaple::ModelBase::FLU;
+    case SUBSTITUTION_MODEL_RTREV:
+      return cmaple::ModelBase::RTREV;
+    case SUBSTITUTION_MODEL_CPREV:
+      return cmaple::ModelBase::CPREV;
+    case SUBSTITUTION_MODEL_NQ_PFAM:
+      return cmaple::ModelBase::NQ_PFAM;
+    case SUBSTITUTION_MODEL_NQ_BIRD:
+      return cmaple::ModelBase::NQ_BIRD;
+    case SUBSTITUTION_MODEL_NQ_MAMMAL:
+      return cmaple::ModelBase::NQ_MAMMAL;
+    case SUBSTITUTION_MODEL_NQ_INSECT:
+      return cmaple::ModelBase::NQ_INSECT;
+    case SUBSTITUTION_MODEL_NQ_PLANT:
+      return cmaple::ModelBase::NQ_PLANT;
+    case SUBSTITUTION_MODEL_NQ_YEAST:
+      return cmaple::ModelBase::NQ_YEAST;
     case SUBSTITUTION_MODEL_GTR:
     default:
       return cmaple::ModelBase::GTR;
@@ -757,6 +902,78 @@ std::string substitutionModelName(const int substitution_model) {
       return "JC";
     case SUBSTITUTION_MODEL_UNREST:
       return "UNREST";
+    case SUBSTITUTION_MODEL_GTR20:
+      return "GTR20";
+    case SUBSTITUTION_MODEL_NONREV:
+      return "NONREV";
+    case SUBSTITUTION_MODEL_LG:
+      return "LG";
+    case SUBSTITUTION_MODEL_WAG:
+      return "WAG";
+    case SUBSTITUTION_MODEL_JTT:
+      return "JTT";
+    case SUBSTITUTION_MODEL_Q_PFAM:
+      return "Q.PFAM";
+    case SUBSTITUTION_MODEL_Q_BIRD:
+      return "Q.BIRD";
+    case SUBSTITUTION_MODEL_Q_MAMMAL:
+      return "Q.MAMMAL";
+    case SUBSTITUTION_MODEL_Q_INSECT:
+      return "Q.INSECT";
+    case SUBSTITUTION_MODEL_Q_PLANT:
+      return "Q.PLANT";
+    case SUBSTITUTION_MODEL_Q_YEAST:
+      return "Q.YEAST";
+    case SUBSTITUTION_MODEL_JTTDCMUT:
+      return "JTTDCMUT";
+    case SUBSTITUTION_MODEL_DCMUT:
+      return "DCMUT";
+    case SUBSTITUTION_MODEL_VT:
+      return "VT";
+    case SUBSTITUTION_MODEL_PMB:
+      return "PMB";
+    case SUBSTITUTION_MODEL_BLOSUM62:
+      return "BLOSUM62";
+    case SUBSTITUTION_MODEL_DAYHOFF:
+      return "DAYHOFF";
+    case SUBSTITUTION_MODEL_MTREV:
+      return "MTREV";
+    case SUBSTITUTION_MODEL_MTART:
+      return "MTART";
+    case SUBSTITUTION_MODEL_MTZOA:
+      return "MTZOA";
+    case SUBSTITUTION_MODEL_MTMET:
+      return "MTMET";
+    case SUBSTITUTION_MODEL_MTVER:
+      return "MTVER";
+    case SUBSTITUTION_MODEL_MTINV:
+      return "MTINV";
+    case SUBSTITUTION_MODEL_MTMAM:
+      return "MTMAM";
+    case SUBSTITUTION_MODEL_FLAVI:
+      return "FLAVI";
+    case SUBSTITUTION_MODEL_HIVB:
+      return "HIVB";
+    case SUBSTITUTION_MODEL_HIVW:
+      return "HIVW";
+    case SUBSTITUTION_MODEL_FLU:
+      return "FLU";
+    case SUBSTITUTION_MODEL_RTREV:
+      return "RTREV";
+    case SUBSTITUTION_MODEL_CPREV:
+      return "CPREV";
+    case SUBSTITUTION_MODEL_NQ_PFAM:
+      return "NQ.PFAM";
+    case SUBSTITUTION_MODEL_NQ_BIRD:
+      return "NQ.BIRD";
+    case SUBSTITUTION_MODEL_NQ_MAMMAL:
+      return "NQ.MAMMAL";
+    case SUBSTITUTION_MODEL_NQ_INSECT:
+      return "NQ.INSECT";
+    case SUBSTITUTION_MODEL_NQ_PLANT:
+      return "NQ.PLANT";
+    case SUBSTITUTION_MODEL_NQ_YEAST:
+      return "NQ.YEAST";
     case SUBSTITUTION_MODEL_GTR:
     default:
       return "GTR";
@@ -775,6 +992,7 @@ std::string inferAlignment(cmaple::Alignment& alignment,
                            const unsigned char* tree_data,
                            const unsigned int tree_size,
                            const int branch_lengths_fixed,
+                           const int no_reroot,
                            const int tree_search_mode) {
   unsigned int removed_samples = 0;
   std::unique_ptr<ScopedAlignmentQualityFilter> scoped_filter;
@@ -808,6 +1026,10 @@ std::string inferAlignment(cmaple::Alignment& alignment,
     std::cout << "Divergence / quality filter: off" << std::endl;
   }
 
+  if (alignment.getSeqType() != cmaple::SeqRegion::SEQ_DNA &&
+      totalConstantSites(constant_sites) > 0) {
+    return errorJson("Constant site counts are only supported for DNA alignments.");
+  }
   ScopedConstantSites scoped_constant_sites(alignment, constant_sites);
   const WarningSummary warning_summary =
       getWarningSummary(alignment, false, 0, {});
@@ -817,7 +1039,7 @@ std::string inferAlignment(cmaple::Alignment& alignment,
 
   const bool effective = cmaple::isEffective(alignment);
   cmaple::Model model(toCmapleSubstitutionModel(substitution_model),
-                      cmaple::SeqRegion::SEQ_DNA);
+                      alignment.getSeqType());
   std::cout << "Substitution model: "
             << substitutionModelName(substitution_model) << std::endl;
   std::unique_ptr<cmaple::Tree> tree;
@@ -834,6 +1056,10 @@ std::string inferAlignment(cmaple::Alignment& alignment,
     std::cout << "Reference tree: loaded";
     if (branch_lengths_fixed != 0) {
       std::cout << " with fixed branch lengths";
+    }
+    if (no_reroot != 0 && tree->params) {
+      tree->params->allow_rerooting = false;
+      std::cout << " without rerooting";
     }
     std::cout << std::endl;
   } else {
@@ -934,13 +1160,17 @@ std::unique_ptr<cmaple::Alignment> parseAlignment(const unsigned char* data,
     throw std::invalid_argument(message.str());
   }
 
-  MemoryInputBuffer alignment_buffer(alignment_text);
-  std::istream alignment_stream(&alignment_buffer);
-  return std::make_unique<cmaple::Alignment>(
-      alignment_stream,
-      "",
-      toCmapleFormat(format),
-      cmaple::SeqRegion::SEQ_DNA);
+  try {
+    return parseAlignmentWithSeqType(
+        alignment_text, format, cmaple::SeqRegion::SEQ_AUTO);
+  } catch (const std::exception& err) {
+    if (!isUnrecognizedCharacterError(err)) {
+      throw;
+    }
+
+    return parseAlignmentWithSeqType(
+        alignment_text, format, cmaple::SeqRegion::SEQ_PROTEIN);
+  }
 }
 
 }  // namespace
@@ -1053,6 +1283,7 @@ extern "C" char* cmaple_infer(const unsigned char* data,
                                const unsigned char* tree_data,
                                unsigned int tree_size,
                                int branch_lengths_fixed,
+                               int no_reroot,
                                int tree_search_mode) {
   try {
     if (data == nullptr || size == 0) {
@@ -1079,6 +1310,7 @@ extern "C" char* cmaple_infer(const unsigned char* data,
                                      tree_data,
                                      tree_size,
                                      branch_lengths_fixed,
+                                     no_reroot,
                                      tree_search_mode));
   } catch (const std::exception& err) {
     return copyResult(errorJson(err.what()));
@@ -1129,6 +1361,7 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle,
                                       const unsigned char* tree_data,
                                       unsigned int tree_size,
                                       int branch_lengths_fixed,
+                                      int no_reroot,
                                       int tree_search_mode) {
   try {
     auto loaded = loaded_alignments.find(handle);
@@ -1156,6 +1389,7 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle,
                                      tree_data,
                                      tree_size,
                                      branch_lengths_fixed,
+                                     no_reroot,
                                      tree_search_mode));
   } catch (const std::exception& err) {
     return copyResult(errorJson(err.what()));

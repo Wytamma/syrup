@@ -19,6 +19,7 @@ import type {
   CmapleWorkerResponse,
   ConstantSiteCounts,
   DivergenceSummary,
+  SequenceType,
   SubstitutionModel,
   TreeSearchType,
 } from '../../types/cmaple'
@@ -26,6 +27,45 @@ import type {
 export type AppState = 'idle' | 'preflight' | 'ready' | 'running' | 'done' | 'error'
 
 const ALIGNMENT_QUERY_PARAM = 'alignment'
+const DNA_MODELS: SubstitutionModel[] = ['GTR', 'JC', 'UNREST']
+const PROTEIN_MODELS: SubstitutionModel[] = [
+  'LG',
+  'WAG',
+  'JTT',
+  'GTR20',
+  'NONREV',
+  'Q.PFAM',
+  'Q.BIRD',
+  'Q.MAMMAL',
+  'Q.INSECT',
+  'Q.PLANT',
+  'Q.YEAST',
+  'JTTDCMUT',
+  'DCMUT',
+  'VT',
+  'PMB',
+  'BLOSUM62',
+  'DAYHOFF',
+  'MTREV',
+  'MTART',
+  'MTZOA',
+  'MTMET',
+  'MTVER',
+  'MTINV',
+  'MTMAM',
+  'FLAVI',
+  'HIVB',
+  'HIVW',
+  'FLU',
+  'RTREV',
+  'CPREV',
+  'NQ.PFAM',
+  'NQ.BIRD',
+  'NQ.MAMMAL',
+  'NQ.INSECT',
+  'NQ.PLANT',
+  'NQ.YEAST',
+]
 
 export function createCmapleApp() {
   let worker: Worker | null = null
@@ -73,6 +113,7 @@ export function createCmapleApp() {
     referenceTreeFileName: '',
     referenceTreeText: '',
     branchLengthsFixed: false,
+    noReroot: false,
     treeSearchType: 'normal' as TreeSearchType,
 
     get divergence() {
@@ -100,6 +141,7 @@ export function createCmapleApp() {
     setUseConstantSites,
     setReferenceTreeFile,
     setBranchLengthsFixed,
+    setNoReroot,
     setTreeSearchType,
     clearCurrent,
     loadAlignmentFromUrl,
@@ -245,6 +287,7 @@ export function createCmapleApp() {
       app.referenceTreeFileName = ''
       app.referenceTreeText = ''
       app.branchLengthsFixed = false
+      app.noReroot = false
       return
     }
 
@@ -256,6 +299,7 @@ export function createCmapleApp() {
       app.referenceTreeFileName = ''
       app.referenceTreeText = ''
       app.branchLengthsFixed = false
+      app.noReroot = false
       app.error = err instanceof Error ? err.message : 'Could not read the selected tree file.'
     }
   }
@@ -264,8 +308,26 @@ export function createCmapleApp() {
     app.branchLengthsFixed = value && !!app.referenceTreeText
   }
 
+  function setNoReroot(value: boolean) {
+    app.noReroot = value && !!app.referenceTreeText
+  }
+
   function setTreeSearchType(value: TreeSearchType) {
     app.treeSearchType = value
+  }
+
+  function getSupportedModels(sequenceType: SequenceType) {
+    return sequenceType === 'protein' ? PROTEIN_MODELS : DNA_MODELS
+  }
+
+  function getDefaultSubstitutionModel(sequenceType: SequenceType): SubstitutionModel {
+    return sequenceType === 'protein' ? 'LG' : 'GTR'
+  }
+
+  function normalizeSubstitutionModel(sequenceType: SequenceType) {
+    if (!getSupportedModels(sequenceType).includes(app.substitutionModel)) {
+      app.substitutionModel = getDefaultSubstitutionModel(sequenceType)
+    }
   }
 
   function clearCurrent() {
@@ -290,6 +352,7 @@ export function createCmapleApp() {
     app.referenceTreeFileName = ''
     app.referenceTreeText = ''
     app.branchLengthsFixed = false
+    app.noReroot = false
     app.treeSearchType = 'normal'
     app.logs = []
     app.newick = ''
@@ -361,6 +424,7 @@ export function createCmapleApp() {
     app.referenceTreeFileName = ''
     app.referenceTreeText = ''
     app.branchLengthsFixed = false
+    app.noReroot = false
     app.treeSearchType = 'normal'
     app.logs = []
     pendingLogLines = []
@@ -410,6 +474,7 @@ export function createCmapleApp() {
     }
     startTimer()
     app.state = 'running'
+    normalizeSubstitutionModel(app.stats?.sequenceType ?? 'dna')
     getWorker().postMessage({
       type: 'infer',
       id: app.currentId,
@@ -423,6 +488,7 @@ export function createCmapleApp() {
       constantSites: sanitizeConstantSites(app.activeConstantSites),
       referenceTreeText: app.referenceTreeText,
       branchLengthsFixed: app.branchLengthsFixed,
+      noReroot: app.noReroot,
       treeSearchType: app.treeSearchType,
     })
   }
@@ -589,6 +655,7 @@ export function createCmapleApp() {
 
       if (message.type === 'preflight') {
         app.stats = message.stats
+        normalizeSubstitutionModel(message.stats.sequenceType)
         setDivergence(message.divergence)
         app.warningSummary = message.warningSummary
         app.warningSummaryPending = false
