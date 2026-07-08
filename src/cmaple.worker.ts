@@ -30,10 +30,10 @@ type EmscriptenModule = {
     constantC: number,
     constantG: number,
     constantT: number,
-    treePtr: number,
-    treeSize: number,
-    referenceAlignmentPtr: number,
-    referenceAlignmentSize: number,
+    startingTreePtr: number,
+    startingTreeSize: number,
+    startingAlignmentPtr: number,
+    startingAlignmentSize: number,
     branchLengthsFixed: number,
     noReroot: number,
     treeSearchType: number,
@@ -52,10 +52,10 @@ type EmscriptenModule = {
     constantC: number,
     constantG: number,
     constantT: number,
-    treePtr: number,
-    treeSize: number,
-    referenceAlignmentPtr: number,
-    referenceAlignmentSize: number,
+    startingTreePtr: number,
+    startingTreeSize: number,
+    startingAlignmentPtr: number,
+    startingAlignmentSize: number,
     branchLengthsFixed: number,
     noReroot: number,
     treeSearchType: number,
@@ -479,8 +479,8 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         `divergenceFilter=${message.filterDivergentSamples}`,
         `maxDivergencePercent=${message.maxDivergencePercent}`,
         `constantSites=${Object.values(constantSites).join(',')}`,
-        `referenceTree=${message.referenceTreeText ? 'true' : 'false'}`,
-        `referenceAlignment=${message.referenceAlignmentText ? 'true' : 'false'}`,
+        `startingTree=${message.startingTreeText ? 'true' : 'false'}`,
+        `startingAlignment=${message.startingAlignmentText ? 'true' : 'false'}`,
         `branchLengthsFixed=${message.branchLengthsFixed}`,
         `noReroot=${message.noReroot}`,
         `treeSearchType=${message.treeSearchType}`,
@@ -491,21 +491,21 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         `heapMiB=${heapMiB(module)}`,
       ].join(' '),
     )
-    const referenceTreeBytes = message.referenceTreeText ? new TextEncoder().encode(message.referenceTreeText) : null
-    let referenceTreePtr = 0
-    if (referenceTreeBytes?.byteLength) {
-      referenceTreePtr = module._cmaple_alloc(referenceTreeBytes.byteLength)
-      if (!referenceTreePtr) throw new Error('Could not allocate WASM memory for the reference tree.')
-      module.HEAPU8.set(referenceTreeBytes, referenceTreePtr)
+    const startingTreeBytes = message.startingTreeText ? new TextEncoder().encode(message.startingTreeText) : null
+    let startingTreePtr = 0
+    if (startingTreeBytes?.byteLength) {
+      startingTreePtr = module._cmaple_alloc(startingTreeBytes.byteLength)
+      if (!startingTreePtr) throw new Error('Could not allocate WASM memory for the starting tree.')
+      module.HEAPU8.set(startingTreeBytes, startingTreePtr)
     }
-    const referenceAlignmentBytes = message.referenceAlignmentText
-      ? new TextEncoder().encode(message.referenceAlignmentText)
+    const startingAlignmentBytes = message.startingAlignmentText
+      ? new TextEncoder().encode(message.startingAlignmentText)
       : null
-    let referenceAlignmentPtr = 0
-    if (referenceAlignmentBytes?.byteLength) {
-      referenceAlignmentPtr = module._cmaple_alloc(referenceAlignmentBytes.byteLength)
-      if (!referenceAlignmentPtr) throw new Error('Could not allocate WASM memory for the reference alignment.')
-      module.HEAPU8.set(referenceAlignmentBytes, referenceAlignmentPtr)
+    let startingAlignmentPtr = 0
+    if (startingAlignmentBytes?.byteLength) {
+      startingAlignmentPtr = module._cmaple_alloc(startingAlignmentBytes.byteLength)
+      if (!startingAlignmentPtr) throw new Error('Could not allocate WASM memory for the starting alignment.')
+      module.HEAPU8.set(startingAlignmentBytes, startingAlignmentPtr)
     }
 
     const inferStartedAt = performance.now()
@@ -524,18 +524,18 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         constantSites.c,
         constantSites.g,
         constantSites.t,
-        referenceTreePtr,
-        referenceTreeBytes?.byteLength ?? 0,
-        referenceAlignmentPtr,
-        referenceAlignmentBytes?.byteLength ?? 0,
+        startingTreePtr,
+        startingTreeBytes?.byteLength ?? 0,
+        startingAlignmentPtr,
+        startingAlignmentBytes?.byteLength ?? 0,
         message.branchLengthsFixed ? 1 : 0,
         message.noReroot ? 1 : 0,
         treeSearchTypeIds[message.treeSearchType],
         message.estimateMat ? 1 : 0,
       )
     } finally {
-      if (referenceTreePtr) module._cmaple_free(referenceTreePtr)
-      if (referenceAlignmentPtr) module._cmaple_free(referenceAlignmentPtr)
+      if (startingTreePtr) module._cmaple_free(startingTreePtr)
+      if (startingAlignmentPtr) module._cmaple_free(startingAlignmentPtr)
     }
     if (!resultPtr) throw new Error('CMAPLE did not return a result.')
     const decodeStartedAt = performance.now()

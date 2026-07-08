@@ -8,7 +8,7 @@
   export let theme: ThemeMode = 'dark'
   export let onToggleTheme: () => void = () => {}
 
-  $: placedSampleNames = app.referenceTreeText && app.referenceAlignmentText ? (app.stats?.sampleNames ?? []) : []
+  $: placedSampleNames = app.startingTreeText && app.startingAlignmentText ? (app.stats?.sampleNames ?? []) : []
 </script>
 
 <AppTopbar {theme} fixed={true} onToggleTheme={onToggleTheme} />

@@ -14,7 +14,7 @@
   import BranchSupportOption from './BranchSupportOption.svelte'
   import ConstantSitesOption from './ConstantSitesOption.svelte'
   import DivergenceQualityFilter from './DivergenceQualityFilter.svelte'
-  import ReferenceTreeOption from './ReferenceTreeOption.svelte'
+  import StartingTreeOption from './StartingTreeOption.svelte'
   import SubstitutionModelOption from './SubstitutionModelOption.svelte'
   import TreeSearchOption from './TreeSearchOption.svelte'
 
@@ -41,8 +41,8 @@
   export let useConstantSites = false
   export let constantSites: ConstantSiteCounts = { a: 0, c: 0, g: 0, t: 0 }
   export let constantSitesText = ''
-  export let referenceTreeFileName = ''
-  export let referenceAlignmentFileName = ''
+  export let startingTreeFileName = ''
+  export let startingAlignmentFileName = ''
   export let branchLengthsFixed = false
   export let noReroot = false
   export let treeSearchType: TreeSearchType = 'normal'
@@ -63,8 +63,8 @@
   export let onConstantSiteTextCommit: (value: string) => void = () => {}
   export let onFormattedConstantSiteTextChange: (value: string) => void = () => {}
   export let onUseConstantSitesChange: (enabled: boolean) => void = () => {}
-  export let onReferenceTreeFileChange: (file: File | null) => void = () => {}
-  export let onReferenceAlignmentFileChange: (file: File | null) => void = () => {}
+  export let onStartingTreeFileChange: (file: File | null) => void = () => {}
+  export let onStartingAlignmentFileChange: (file: File | null) => void = () => {}
   export let onBranchLengthsFixedChange: (enabled: boolean) => void = () => {}
   export let onNoRerootChange: (enabled: boolean) => void = () => {}
   export let onTreeSearchTypeChange: (value: TreeSearchType) => void = () => {}
@@ -126,10 +126,10 @@
         </div>
       {/if}
 
-      {#if !error && referenceTreeFileName}
+      {#if !error && startingTreeFileName}
         <div class="notice">
           New samples from <strong>{fileName || 'the input alignment'}</strong> will be placed on the
-          <strong>{referenceTreeFileName}</strong> reference tree
+          <strong>{startingTreeFileName}</strong> starting tree
         </div>
       {/if}
 
@@ -211,14 +211,14 @@
               disabled={state === 'running'}
               onChange={onTreeSearchTypeChange}
             />
-            <ReferenceTreeOption
-              fileName={referenceTreeFileName}
-              {referenceAlignmentFileName}
+            <StartingTreeOption
+              fileName={startingTreeFileName}
+              {startingAlignmentFileName}
               {branchLengthsFixed}
               {noReroot}
               disabled={state === 'running'}
-              onFileChange={onReferenceTreeFileChange}
-              onReferenceAlignmentFileChange={onReferenceAlignmentFileChange}
+              onFileChange={onStartingTreeFileChange}
+              onStartingAlignmentFileChange={onStartingAlignmentFileChange}
               onBranchLengthsFixedChange={onBranchLengthsFixedChange}
               onNoRerootChange={onNoRerootChange}
             />

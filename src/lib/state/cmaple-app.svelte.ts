@@ -27,8 +27,8 @@ import type {
 export type AppState = 'idle' | 'preflight' | 'ready' | 'running' | 'done' | 'error'
 
 const ALIGNMENT_QUERY_PARAM = 'alignment'
-const REFERENCE_TREE_QUERY_PARAMS = ['referenceTree', 'refTree', 'tree']
-const REFERENCE_ALIGNMENT_QUERY_PARAMS = ['referenceAlignment', 'refAlignment', 'refAln']
+const STARTING_TREE_QUERY_PARAMS = ['startingTree']
+const STARTING_ALIGNMENT_QUERY_PARAMS = ['startingAlignment']
 const DNA_MODELS: SubstitutionModel[] = ['GTR', 'JC', 'UNREST']
 const PROTEIN_MODELS: SubstitutionModel[] = [
   'LG',
@@ -113,10 +113,10 @@ export function createCmapleApp() {
     useConstantSites: false,
     constantSites: { a: 0, c: 0, g: 0, t: 0 } as ConstantSiteCounts,
     constantSitesText: formatConstantSites(ZERO_CONSTANT_SITES),
-    referenceTreeFileName: '',
-    referenceTreeText: '',
-    referenceAlignmentFileName: '',
-    referenceAlignmentText: '',
+    startingTreeFileName: '',
+    startingTreeText: '',
+    startingAlignmentFileName: '',
+    startingAlignmentText: '',
     branchLengthsFixed: false,
     noReroot: false,
     treeSearchType: 'normal' as TreeSearchType,
@@ -145,8 +145,8 @@ export function createCmapleApp() {
     setConstantSiteCountsFromText,
     setConstantSitesText,
     setUseConstantSites,
-    setReferenceTreeFile,
-    setReferenceAlignmentFile,
+    setStartingTreeFile,
+    setStartingAlignmentFile,
     setBranchLengthsFixed,
     setNoReroot,
     setTreeSearchType,
@@ -189,18 +189,18 @@ export function createCmapleApp() {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     const alignmentUrl = params.get(ALIGNMENT_QUERY_PARAM)
-    const referenceTreeUrl = getFirstQueryParam(params, REFERENCE_TREE_QUERY_PARAMS)
-    const referenceAlignmentUrl = getFirstQueryParam(params, REFERENCE_ALIGNMENT_QUERY_PARAMS)
+    const startingTreeUrl = getFirstQueryParam(params, STARTING_TREE_QUERY_PARAMS)
+    const startingAlignmentUrl = getFirstQueryParam(params, STARTING_ALIGNMENT_QUERY_PARAMS)
     if (!alignmentUrl) return
 
     try {
-      const [referenceTreeFile, referenceAlignmentFile] = await Promise.all([
-        referenceTreeUrl ? downloadTextFileFromUrl(referenceTreeUrl, 'reference-tree.nwk') : Promise.resolve(null),
-        referenceAlignmentUrl ? downloadTextFileFromUrl(referenceAlignmentUrl, 'reference-alignment.maple') : Promise.resolve(null),
+      const [startingTreeFile, startingAlignmentFile] = await Promise.all([
+        startingTreeUrl ? downloadTextFileFromUrl(startingTreeUrl, 'starting-tree.nwk') : Promise.resolve(null),
+        startingAlignmentUrl ? downloadTextFileFromUrl(startingAlignmentUrl, 'starting-alignment.maple') : Promise.resolve(null),
       ])
 
-      if (referenceTreeFile) await setReferenceTreeFile(referenceTreeFile)
-      if (referenceAlignmentFile) await setReferenceAlignmentFile(referenceAlignmentFile)
+      if (startingTreeFile) await setStartingTreeFile(startingTreeFile)
+      if (startingAlignmentFile) await setStartingAlignmentFile(startingAlignmentFile)
       await loadAlignmentFromUrl(alignmentUrl)
     } catch (err) {
       app.error = err instanceof Error ? err.message : 'Could not download files from the URL parameters.'
@@ -222,7 +222,7 @@ export function createCmapleApp() {
   }
 
   function refreshEffectiveStatus() {
-    if (app.referenceAlignmentText) {
+    if (app.startingAlignmentText) {
       app.effectiveStatus = null
       return
     }
@@ -322,12 +322,12 @@ export function createCmapleApp() {
     if (app.filterDivergentSamples) requestWarningSummary()
   }
 
-  async function setReferenceTreeFile(file: File | null) {
+  async function setStartingTreeFile(file: File | null) {
     if (!file) {
-      app.referenceTreeFileName = ''
-      app.referenceTreeText = ''
-      app.referenceAlignmentFileName = ''
-      app.referenceAlignmentText = ''
+      app.startingTreeFileName = ''
+      app.startingTreeText = ''
+      app.startingAlignmentFileName = ''
+      app.startingAlignmentText = ''
       app.branchLengthsFixed = false
       app.noReroot = false
       refreshDerivedAlignmentState()
@@ -335,17 +335,17 @@ export function createCmapleApp() {
     }
 
     try {
-      app.referenceTreeFileName = file.name
-      app.referenceTreeText = await file.text()
-      app.referenceAlignmentFileName = ''
-      app.referenceAlignmentText = ''
+      app.startingTreeFileName = file.name
+      app.startingTreeText = await file.text()
+      app.startingAlignmentFileName = ''
+      app.startingAlignmentText = ''
       app.error = ''
       refreshDerivedAlignmentState()
     } catch (err) {
-      app.referenceTreeFileName = ''
-      app.referenceTreeText = ''
-      app.referenceAlignmentFileName = ''
-      app.referenceAlignmentText = ''
+      app.startingTreeFileName = ''
+      app.startingTreeText = ''
+      app.startingAlignmentFileName = ''
+      app.startingAlignmentText = ''
       app.branchLengthsFixed = false
       app.noReroot = false
       app.error = err instanceof Error ? err.message : 'Could not read the selected tree file.'
@@ -353,33 +353,33 @@ export function createCmapleApp() {
     }
   }
 
-  async function setReferenceAlignmentFile(file: File | null) {
-    if (!file || !app.referenceTreeText) {
-      app.referenceAlignmentFileName = ''
-      app.referenceAlignmentText = ''
+  async function setStartingAlignmentFile(file: File | null) {
+    if (!file || !app.startingTreeText) {
+      app.startingAlignmentFileName = ''
+      app.startingAlignmentText = ''
       refreshDerivedAlignmentState()
       return
     }
 
     try {
-      app.referenceAlignmentFileName = file.name
-      app.referenceAlignmentText = await file.text()
+      app.startingAlignmentFileName = file.name
+      app.startingAlignmentText = await file.text()
       app.error = ''
       refreshDerivedAlignmentState()
     } catch (err) {
-      app.referenceAlignmentFileName = ''
-      app.referenceAlignmentText = ''
-      app.error = err instanceof Error ? err.message : 'Could not read the selected reference alignment file.'
+      app.startingAlignmentFileName = ''
+      app.startingAlignmentText = ''
+      app.error = err instanceof Error ? err.message : 'Could not read the selected starting alignment file.'
       refreshDerivedAlignmentState()
     }
   }
 
   function setBranchLengthsFixed(value: boolean) {
-    app.branchLengthsFixed = value && !!app.referenceTreeText
+    app.branchLengthsFixed = value && !!app.startingTreeText
   }
 
   function setNoReroot(value: boolean) {
-    app.noReroot = value && !!app.referenceTreeText
+    app.noReroot = value && !!app.startingTreeText
   }
 
   function setTreeSearchType(value: TreeSearchType) {
@@ -423,10 +423,10 @@ export function createCmapleApp() {
     app.useConstantSites = false
     app.constantSites = { a: 0, c: 0, g: 0, t: 0 }
     app.constantSitesText = formatConstantSites(app.constantSites)
-    app.referenceTreeFileName = ''
-    app.referenceTreeText = ''
-    app.referenceAlignmentFileName = ''
-    app.referenceAlignmentText = ''
+    app.startingTreeFileName = ''
+    app.startingTreeText = ''
+    app.startingAlignmentFileName = ''
+    app.startingAlignmentText = ''
     app.branchLengthsFixed = false
     app.noReroot = false
     app.treeSearchType = 'normal'
@@ -548,8 +548,8 @@ export function createCmapleApp() {
       filterDivergentSamples: app.filterDivergentSamples,
       maxDivergencePercent: app.maxDivergencePercent,
       constantSites: sanitizeConstantSites(app.activeConstantSites),
-      referenceTreeText: app.referenceTreeText,
-      referenceAlignmentText: app.referenceAlignmentText,
+      startingTreeText: app.startingTreeText,
+      startingAlignmentText: app.startingAlignmentText,
       branchLengthsFixed: app.branchLengthsFixed,
       noReroot: app.noReroot,
       treeSearchType: app.treeSearchType,
