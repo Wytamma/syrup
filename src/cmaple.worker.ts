@@ -32,6 +32,8 @@ type EmscriptenModule = {
     constantT: number,
     treePtr: number,
     treeSize: number,
+    referenceAlignmentPtr: number,
+    referenceAlignmentSize: number,
     branchLengthsFixed: number,
     noReroot: number,
     treeSearchType: number,
@@ -51,6 +53,8 @@ type EmscriptenModule = {
     constantT: number,
     treePtr: number,
     treeSize: number,
+    referenceAlignmentPtr: number,
+    referenceAlignmentSize: number,
     branchLengthsFixed: number,
     noReroot: number,
     treeSearchType: number,
@@ -474,6 +478,7 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         `maxDivergencePercent=${message.maxDivergencePercent}`,
         `constantSites=${Object.values(constantSites).join(',')}`,
         `referenceTree=${message.referenceTreeText ? 'true' : 'false'}`,
+        `referenceAlignment=${message.referenceAlignmentText ? 'true' : 'false'}`,
         `branchLengthsFixed=${message.branchLengthsFixed}`,
         `noReroot=${message.noReroot}`,
         `treeSearchType=${message.treeSearchType}`,
@@ -489,6 +494,15 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
       referenceTreePtr = module._cmaple_alloc(referenceTreeBytes.byteLength)
       if (!referenceTreePtr) throw new Error('Could not allocate WASM memory for the reference tree.')
       module.HEAPU8.set(referenceTreeBytes, referenceTreePtr)
+    }
+    const referenceAlignmentBytes = message.referenceAlignmentText
+      ? new TextEncoder().encode(message.referenceAlignmentText)
+      : null
+    let referenceAlignmentPtr = 0
+    if (referenceAlignmentBytes?.byteLength) {
+      referenceAlignmentPtr = module._cmaple_alloc(referenceAlignmentBytes.byteLength)
+      if (!referenceAlignmentPtr) throw new Error('Could not allocate WASM memory for the reference alignment.')
+      module.HEAPU8.set(referenceAlignmentBytes, referenceAlignmentPtr)
     }
 
     const inferStartedAt = performance.now()
@@ -509,12 +523,15 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         constantSites.t,
         referenceTreePtr,
         referenceTreeBytes?.byteLength ?? 0,
+        referenceAlignmentPtr,
+        referenceAlignmentBytes?.byteLength ?? 0,
         message.branchLengthsFixed ? 1 : 0,
         message.noReroot ? 1 : 0,
         treeSearchTypeIds[message.treeSearchType],
       )
     } finally {
       if (referenceTreePtr) module._cmaple_free(referenceTreePtr)
+      if (referenceAlignmentPtr) module._cmaple_free(referenceAlignmentPtr)
     }
     if (!resultPtr) throw new Error('CMAPLE did not return a result.')
     const decodeStartedAt = performance.now()

@@ -69,6 +69,7 @@
       constantSites={app.constantSites}
       constantSitesText={app.constantSitesText}
       referenceTreeFileName={app.referenceTreeFileName}
+      referenceAlignmentFileName={app.referenceAlignmentFileName}
       branchLengthsFixed={app.branchLengthsFixed}
       noReroot={app.noReroot}
       treeSearchType={app.treeSearchType}
@@ -89,6 +90,7 @@
       onFormattedConstantSiteTextChange={app.setConstantSitesText}
       onUseConstantSitesChange={app.setUseConstantSites}
       onReferenceTreeFileChange={app.setReferenceTreeFile}
+      onReferenceAlignmentFileChange={app.setReferenceAlignmentFile}
       onBranchLengthsFixedChange={app.setBranchLengthsFixed}
       onNoRerootChange={app.setNoReroot}
       onTreeSearchTypeChange={app.setTreeSearchType}

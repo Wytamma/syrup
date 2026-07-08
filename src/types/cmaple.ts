@@ -104,6 +104,7 @@ export type CmapleWorkerRequest =
       maxDivergencePercent: number
       constantSites: ConstantSiteCounts
       referenceTreeText: string
+      referenceAlignmentText: string
       branchLengthsFixed: boolean
       noReroot: boolean
       treeSearchType: TreeSearchType

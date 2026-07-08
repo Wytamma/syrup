@@ -14,6 +14,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -227,20 +228,6 @@ std::string_view trimAlignmentBytes(const unsigned char* data, unsigned int size
   }
 
   return view;
-}
-
-std::size_t countFastaHeaders(std::string_view input) {
-  std::size_t count = 0;
-  bool at_line_start = true;
-
-  for (const char ch : input) {
-    if (at_line_start && ch == '>') {
-      ++count;
-    }
-    at_line_start = ch == '\n' || ch == '\r';
-  }
-
-  return count;
 }
 
 std::string jsonEscape(const std::string& input) {
@@ -811,6 +798,70 @@ std::unique_ptr<cmaple::Alignment> parseAlignmentWithSeqType(
       sequence_type);
 }
 
+class ScopedReferenceAlignmentMerge {
+ public:
+  ScopedReferenceAlignmentMerge(cmaple::Alignment& alignment,
+                                const unsigned char* reference_alignment_data,
+                                const unsigned int reference_alignment_size)
+      : alignment_(alignment), original_sequence_count_(alignment.data.size()) {
+    if (reference_alignment_data == nullptr || reference_alignment_size == 0) {
+      return;
+    }
+
+    const std::string_view reference_alignment_text =
+        trimAlignmentBytes(reference_alignment_data, reference_alignment_size);
+    if (reference_alignment_text.empty()) {
+      throw std::invalid_argument("Reference alignment file is empty.");
+    }
+
+    auto reference_alignment =
+        parseAlignmentWithSeqType(reference_alignment_text,
+                                  FORMAT_AUTO,
+                                  alignment.getSeqType());
+    if (reference_alignment->ref_seq != alignment.ref_seq) {
+      throw std::invalid_argument(
+          "Reference alignment must use the same reference sequence as the input alignment.");
+    }
+
+    std::unordered_set<std::string> existing_names;
+    existing_names.reserve(alignment.data.size() + reference_alignment->data.size());
+    for (const auto& sequence : alignment.data) {
+      existing_names.insert(sequence.seq_name);
+    }
+
+    for (const auto& sequence : reference_alignment->data) {
+      if (existing_names.find(sequence.seq_name) != existing_names.end()) {
+        std::ostringstream message;
+        message << "Reference alignment contains a duplicate sample name: "
+                << sequence.seq_name;
+        throw std::invalid_argument(message.str());
+      }
+      existing_names.insert(sequence.seq_name);
+    }
+
+    alignment.data.reserve(alignment.data.size() + reference_alignment->data.size());
+    for (auto& sequence : reference_alignment->data) {
+      alignment.data.push_back(std::move(sequence));
+    }
+    added_sequence_count_ = alignment.data.size() - original_sequence_count_;
+  }
+
+  ~ScopedReferenceAlignmentMerge() {
+    if (added_sequence_count_ > 0) {
+      alignment_.data.resize(original_sequence_count_);
+    }
+  }
+
+  unsigned int addedSequenceCount() const {
+    return static_cast<unsigned int>(added_sequence_count_);
+  }
+
+ private:
+  cmaple::Alignment& alignment_;
+  std::size_t original_sequence_count_ = 0;
+  std::size_t added_sequence_count_ = 0;
+};
+
 cmaple::ModelBase::SubModel toCmapleSubstitutionModel(
     const int substitution_model) {
   switch (substitution_model) {
@@ -991,10 +1042,22 @@ std::string inferAlignment(cmaple::Alignment& alignment,
                            const ConstantSiteCounts& constant_sites,
                            const unsigned char* tree_data,
                            const unsigned int tree_size,
+                           const unsigned char* reference_alignment_data,
+                           const unsigned int reference_alignment_size,
                            const int branch_lengths_fixed,
                            const int no_reroot,
                            const int tree_search_mode) {
   unsigned int removed_samples = 0;
+  ScopedReferenceAlignmentMerge reference_alignment_merge(
+      alignment, reference_alignment_data, reference_alignment_size);
+  if (reference_alignment_merge.addedSequenceCount() > 0) {
+    std::cout << "Reference alignment: added "
+              << reference_alignment_merge.addedSequenceCount()
+              << " samples" << std::endl;
+  } else {
+    std::cout << "Reference alignment: none" << std::endl;
+  }
+
   std::unique_ptr<ScopedAlignmentQualityFilter> scoped_filter;
 
   if (filter_divergent_samples) {
@@ -1024,6 +1087,15 @@ std::string inferAlignment(cmaple::Alignment& alignment,
     std::cout << std::endl;
   } else {
     std::cout << "Divergence / quality filter: off" << std::endl;
+  }
+
+  if (alignment.data.size() < 3) {
+    std::ostringstream message;
+    message << "CMAPLE requires at least 3 samples at inference time; "
+            << alignment.data.size()
+            << " sample" << (alignment.data.size() == 1 ? "" : "s")
+            << " available after adding the reference alignment.";
+    return errorJson(message.str());
   }
 
   if (alignment.getSeqType() != cmaple::SeqRegion::SEQ_DNA &&
@@ -1150,16 +1222,6 @@ std::unique_ptr<cmaple::Alignment> parseAlignment(const unsigned char* data,
     throw std::invalid_argument(
         "Compressed .gz input is not supported in the browser build. Please upload a plain text FASTA, PHYLIP, or MAPLE file.");
   }
-  const std::size_t fasta_headers = countFastaHeaders(alignment_text);
-  if (toCmapleFormat(format) == cmaple::Alignment::IN_FASTA &&
-      fasta_headers > 0 && fasta_headers < 3) {
-    std::ostringstream message;
-    message << "FASTA input contains " << fasta_headers
-            << " sequence" << (fasta_headers == 1 ? "" : "s")
-            << ". CMAPLE requires at least 3 sequences.";
-    throw std::invalid_argument(message.str());
-  }
-
   try {
     return parseAlignmentWithSeqType(
         alignment_text, format, cmaple::SeqRegion::SEQ_AUTO);
@@ -1282,6 +1344,8 @@ extern "C" char* cmaple_infer(const unsigned char* data,
                                unsigned int constant_t,
                                const unsigned char* tree_data,
                                unsigned int tree_size,
+                               const unsigned char* reference_alignment_data,
+                               unsigned int reference_alignment_size,
                                int branch_lengths_fixed,
                                int no_reroot,
                                int tree_search_mode) {
@@ -1309,6 +1373,8 @@ extern "C" char* cmaple_infer(const unsigned char* data,
                                      constant_sites,
                                      tree_data,
                                      tree_size,
+                                     reference_alignment_data,
+                                     reference_alignment_size,
                                      branch_lengths_fixed,
                                      no_reroot,
                                      tree_search_mode));
@@ -1329,7 +1395,8 @@ extern "C" char* cmaple_analyze(const unsigned char* data,
 
     cmaple::verbose_mode = cmaple::VB_QUIET;
     auto alignment = parseAlignment(data, size, format);
-    const bool effective = cmaple::isEffective(*alignment);
+    const bool effective =
+        alignment->data.size() >= 3 ? cmaple::isEffective(*alignment) : false;
     const unsigned int handle = next_alignment_handle++;
     LoadedAlignment loaded{
         std::move(alignment),
@@ -1360,6 +1427,8 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle,
                                       unsigned int constant_t,
                                       const unsigned char* tree_data,
                                       unsigned int tree_size,
+                                      const unsigned char* reference_alignment_data,
+                                      unsigned int reference_alignment_size,
                                       int branch_lengths_fixed,
                                       int no_reroot,
                                       int tree_search_mode) {
@@ -1388,6 +1457,8 @@ extern "C" char* cmaple_infer_loaded(unsigned int handle,
                                      constant_sites,
                                      tree_data,
                                      tree_size,
+                                     reference_alignment_data,
+                                     reference_alignment_size,
                                      branch_lengths_fixed,
                                      no_reroot,
                                      tree_search_mode));

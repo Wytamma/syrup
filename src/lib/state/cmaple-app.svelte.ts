@@ -112,6 +112,8 @@ export function createCmapleApp() {
     constantSitesText: formatConstantSites(ZERO_CONSTANT_SITES),
     referenceTreeFileName: '',
     referenceTreeText: '',
+    referenceAlignmentFileName: '',
+    referenceAlignmentText: '',
     branchLengthsFixed: false,
     noReroot: false,
     treeSearchType: 'normal' as TreeSearchType,
@@ -140,6 +142,7 @@ export function createCmapleApp() {
     setConstantSitesText,
     setUseConstantSites,
     setReferenceTreeFile,
+    setReferenceAlignmentFile,
     setBranchLengthsFixed,
     setNoReroot,
     setTreeSearchType,
@@ -286,6 +289,8 @@ export function createCmapleApp() {
     if (!file) {
       app.referenceTreeFileName = ''
       app.referenceTreeText = ''
+      app.referenceAlignmentFileName = ''
+      app.referenceAlignmentText = ''
       app.branchLengthsFixed = false
       app.noReroot = false
       return
@@ -294,13 +299,35 @@ export function createCmapleApp() {
     try {
       app.referenceTreeFileName = file.name
       app.referenceTreeText = await file.text()
+      app.referenceAlignmentFileName = ''
+      app.referenceAlignmentText = ''
       app.error = ''
     } catch (err) {
       app.referenceTreeFileName = ''
       app.referenceTreeText = ''
+      app.referenceAlignmentFileName = ''
+      app.referenceAlignmentText = ''
       app.branchLengthsFixed = false
       app.noReroot = false
       app.error = err instanceof Error ? err.message : 'Could not read the selected tree file.'
+    }
+  }
+
+  async function setReferenceAlignmentFile(file: File | null) {
+    if (!file || !app.referenceTreeText) {
+      app.referenceAlignmentFileName = ''
+      app.referenceAlignmentText = ''
+      return
+    }
+
+    try {
+      app.referenceAlignmentFileName = file.name
+      app.referenceAlignmentText = await file.text()
+      app.error = ''
+    } catch (err) {
+      app.referenceAlignmentFileName = ''
+      app.referenceAlignmentText = ''
+      app.error = err instanceof Error ? err.message : 'Could not read the selected reference alignment file.'
     }
   }
 
@@ -351,6 +378,8 @@ export function createCmapleApp() {
     app.constantSitesText = formatConstantSites(app.constantSites)
     app.referenceTreeFileName = ''
     app.referenceTreeText = ''
+    app.referenceAlignmentFileName = ''
+    app.referenceAlignmentText = ''
     app.branchLengthsFixed = false
     app.noReroot = false
     app.treeSearchType = 'normal'
@@ -423,6 +452,8 @@ export function createCmapleApp() {
     app.constantSitesText = formatConstantSites(app.constantSites)
     app.referenceTreeFileName = ''
     app.referenceTreeText = ''
+    app.referenceAlignmentFileName = ''
+    app.referenceAlignmentText = ''
     app.branchLengthsFixed = false
     app.noReroot = false
     app.treeSearchType = 'normal'
@@ -487,6 +518,7 @@ export function createCmapleApp() {
       maxDivergencePercent: app.maxDivergencePercent,
       constantSites: sanitizeConstantSites(app.activeConstantSites),
       referenceTreeText: app.referenceTreeText,
+      referenceAlignmentText: app.referenceAlignmentText,
       branchLengthsFixed: app.branchLengthsFixed,
       noReroot: app.noReroot,
       treeSearchType: app.treeSearchType,
