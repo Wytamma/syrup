@@ -548,11 +548,19 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.notice,
 .warning,
 .error {
   padding: 12px;
   border-radius: 10px;
   overflow-wrap: anywhere;
+}
+
+.notice {
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 400;
 }
 
 .warning {

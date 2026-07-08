@@ -167,6 +167,13 @@
         </div>
       {/if}
 
+      {#if referenceTreeFileName}
+        <div class="notice">
+          New samples from <strong>{fileName || 'the input alignment'}</strong> will be placed on the
+          <strong>{referenceTreeFileName}</strong> reference tree
+        </div>
+      {/if}
+
       {#if displayedWarnings.length}
         <div class="warning">{displayedWarnings.join(' ')}</div>
       {/if}

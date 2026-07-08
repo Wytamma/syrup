@@ -251,12 +251,7 @@ export function createCmapleApp() {
       app.maxDivergencePercent,
       getActiveConstantSites(),
     )
-    app.displayedWarnings = app.referenceTreeText
-      ? [
-          `New samples from ${app.fileName || 'the input alignment'} will be placed on the ${app.referenceTreeFileName || 'selected'} reference tree.`,
-          ...warnings,
-        ]
-      : warnings
+    app.displayedWarnings = warnings
   }
 
   function refreshDerivedAlignmentState() {
