@@ -1,22 +1,23 @@
-# Syrup
+[![Syrup landing page](assets/logo.png)](https://syrup.cpg.org.au/)
 
-Syrup is a browser app for running [CMAPLE](https://github.com/iqtree/cmaple/wiki/User-Manual) phylogenetic inference without installing command-line software. It accepts FASTA, PHYLIP, and MAPLE alignments, checks whether the data are suitable for CMAPLE, runs inference in WebAssembly, and shows the tree in the browser.
-
-![Syrup landing page](assets/screenshots/landing.png)
+[Syrup](https://syrup.cpg.org.au) is a browser app for running [CMAPLE](https://github.com/iqtree/cmaple/wiki/User-Manual) phylogenetic inference without installing command-line software. It accepts FASTA, PHYLIP, and MAPLE alignments, checks whether the data are suitable for CMAPLE, runs inference in WebAssembly, and shows the tree in the browser.
 
 ## When to use Syrup
 
-Use Syrup for exploratory, teaching, or privacy-sensitive analysis of closely related pathogen genomes. It is a good fit when you want to:
+Use Syrup when you need fast, installation-free phylogenetic inference for closely related pathogen genomes. It is designed for genomic surveillance, teaching, and privacy-sensitive analysis where you want to keep alignment data on your own computer while still using likelihood-based inference at large epidemiological scale.
 
-- infer a tree from an aligned FASTA, PHYLIP, or MAPLE file;
-- check whether an alignment is suitable for CMAPLE;
-- export an alignment in MAPLE format;
-- test sample filtering or branch support settings;
-- view and download the inferred tree.
+Syrup is a good fit when you want to:
 
-For very large production runs, native CMAPLE is usually faster and exposes more command-line options.
+- run CMAPLE from an aligned FASTA, PHYLIP, or MAPLE file without installing command-line tools;
+- check whether an alignment has the close relatedness and sparsity that make CMAPLE effective;
+- infer trees with hundreds or thousands of samples directly in the browser;
+- export an alignment in MAPLE format for downstream or command-line analysis;
+- test sample filtering, starting trees, branch support, and other run settings;
+- inspect the inferred tree interactively, then copy or download the result.
 
-For the full command-line option reference, see the [CMAPLE User Manual](https://github.com/iqtree/cmaple/wiki/User-Manual).
+We provide several example workflows in the [Browser based workflows](workflows/phylogenetic-placement/) section of the documentation.
+
+For very large production runs, native CMAPLE is usually faster and exposes more command-line options. For the full command-line option reference, see the [CMAPLE User Manual](https://github.com/iqtree/cmaple/wiki/User-Manual).
 
 ## Privacy
 

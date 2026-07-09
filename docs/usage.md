@@ -2,6 +2,8 @@
 
 Syrup has one main workflow: load an alignment, review the preflight checks, run CMAPLE, and export the result.
 
+[![Syrup landing page](assets/screenshots/landing.png)](https://syrup.cpg.org.au/)
+
 ## Load an alignment
 
 Drop an alignment file onto the start screen, or select the drop zone and choose a file. Syrup accepts FASTA, PHYLIP, and MAPLE text files.
