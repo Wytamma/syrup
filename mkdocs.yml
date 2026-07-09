@@ -1,0 +1,49 @@
+site_name: Syrup
+repo_url: https://github.com/Wytamma/syrup
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  homepage: https://syrup.cpg.org.au/
+  # logo: assets/logo.png
+  favicon: assets/favicon.png
+  palette:
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - toc.follow
+    - content.action.edit
+
+nav:
+  - Introduction: index.md
+  - Usage: usage.md
+  - Inputs: inputs.md
+  - Outputs: outputs.md
+  - Settings: settings.md
+  - Sharing: sharing.md
+  - Browser based workflows:
+      - Phylogenetic placement: workflows/phylogenetic-placement.md
+      - Pathogen phylogenetics with Nextclade: workflows/pathogen-nextclade.md
+      - Molecular clock with Clockor2: workflows/clockor2.md
+      - Amino acid phylogenetics with MUSCLE: workflows/amino-acid-muscle.md
+  - Citation: citation.md
+  - App: https://syrup.cpg.org.au/
+
+markdown_extensions:
+  - admonition
+
+extra_css:
+  - assets/stylesheets/extra.css
+
+plugins:
+  - search
