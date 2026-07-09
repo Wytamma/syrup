@@ -8,9 +8,9 @@ You need:
 
 - a new-sample alignment;
 - a starting tree in Newick or NEXUS format;
-- the starting alignment used with the starting tree, when available.
+- the starting alignment used with the starting tree (only required when samples in the starting tree are not present in the new-sample alignment).
 
-The new-sample alignment and starting alignment should describe the same genomic coordinates.
+The new-sample alignment and starting alignment should use the same reference sequence and be in the same format (FASTA, PHYLIP, or MAPLE). The starting tree should have been inferred from the starting alignment.
 
 ## Load the placement run
 
