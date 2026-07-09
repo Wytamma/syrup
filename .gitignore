@@ -40,3 +40,4 @@ test-results
 simulations/*.fasta
 simulations/*.log
 simulations/*.nwk
+benchmark/simulations/datasets

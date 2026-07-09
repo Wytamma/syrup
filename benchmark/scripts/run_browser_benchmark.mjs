@@ -76,6 +76,7 @@ async function main() {
   const host = args.host ?? '127.0.0.1'
   const port = await findPort(host, Number(args['start-port'] ?? 5173))
   const timeoutMs = Number(args['server-timeout-seconds'] ?? 120) * 1000
+  const allowEmptyTree = parseBool(args['allow-empty-tree'] ?? 'false')
   const logs = []
   const bench = []
 
@@ -105,6 +106,13 @@ async function main() {
     await waitForServer(`http://${host}:${port}`, timeoutMs)
     browser = await chromium.launch({ headless: true })
     const page = await browser.newPage({ acceptDownloads: true })
+    const hardwareConcurrency = Number(args['hardware-concurrency'] ?? args.threads ?? 4)
+    await page.addInitScript((value) => {
+      Object.defineProperty(navigator, 'hardwareConcurrency', {
+        configurable: true,
+        get: () => value,
+      })
+    }, hardwareConcurrency)
 
     page.on('console', (message) => {
       const text = message.text()
@@ -120,10 +128,13 @@ async function main() {
 
     await page.goto(`http://${host}:${port}`, { waitUntil: 'networkidle' })
     await page.locator('input[type=file]').first().setInputFiles(dataset)
-    await page.getByRole('button', { name: 'Run' }).waitFor({ state: 'visible', timeout: timeoutMs })
-
-    if (Number(args.threads ?? 4) !== 4) {
-      await page.locator('label.thread-option input[type=range]').fill(String(args.threads))
+    const preflightCompleted = await Promise.race([
+      page.getByRole('button', { name: 'Run' }).waitFor({ state: 'visible', timeout: timeoutMs }).then(() => 'ready'),
+      page.locator('.error[role=alert], .error').first().waitFor({ state: 'visible', timeout: timeoutMs }).then(() => 'error'),
+    ])
+    if (preflightCompleted === 'error') {
+      const errorText = await page.locator('.error[role=alert], .error').first().innerText()
+      throw new Error(errorText || 'CMAPLE preflight failed.')
     }
 
     const branchSupport = parseBool(args['branch-support'])
@@ -131,25 +142,24 @@ async function main() {
     const branchSupportReplicates = Number(args.replicates ?? 1000)
     const filterDivergentSamples = parseBool(args['filter-divergent-samples'])
     const maxDivergencePercent = Number(args['max-divergence-percent'] ?? 6.7)
-    const needsAdvancedOptions =
-      branchSupportMethod !== 'sprta' ||
-      (branchSupportMethod === 'sh-alrt' && branchSupportReplicates !== 1000) ||
-      filterDivergentSamples ||
-      maxDivergencePercent !== 6.7
 
+    const branchSupportCheckbox = page.locator('.branch-support-option > input[type=checkbox]').first()
+    if (branchSupportMethod !== 'none') {
+      await branchSupportCheckbox.check()
+      await page.locator(`input[type=radio][name=branch-support-method][value="${branchSupportMethod}"]`).check()
+      if (branchSupportMethod === 'sh-alrt') {
+        await page.locator('input[aria-label="SH-aLRT replicates"]').fill(String(branchSupportReplicates))
+        if (args.threads !== undefined) {
+          await page.locator('label.thread-option input[type=range]').fill(String(args.threads))
+        }
+      }
+    } else {
+      await branchSupportCheckbox.uncheck()
+    }
+
+    const needsAdvancedOptions = filterDivergentSamples || maxDivergencePercent !== 6.7
     if (needsAdvancedOptions) {
       await page.locator('details.advanced-options summary').click()
-
-      const branchSupportCheckbox = page.locator('.branch-support-option > input[type=checkbox]').first()
-      if (branchSupportMethod !== 'none') {
-        await branchSupportCheckbox.check()
-        await page.locator(`input[type=radio][name=branch-support-method][value="${branchSupportMethod}"]`).check()
-        if (branchSupportMethod === 'sh-alrt') {
-          await page.locator('input[aria-label="SH-aLRT replicates"]').fill(String(branchSupportReplicates))
-        }
-      } else {
-        await branchSupportCheckbox.uncheck()
-      }
 
       const filterCheckbox = page.locator('.divergence-option input[type=checkbox]').first()
       if (filterDivergentSamples) {
@@ -161,7 +171,34 @@ async function main() {
     }
 
     await page.getByRole('button', { name: 'Run' }).click()
-    await page.locator('.tree-reset-button').waitFor({ state: 'visible', timeout: 24 * 60 * 60 * 1000 })
+    const runCompleted = await Promise.race([
+      page.locator('.tree-reset-button').waitFor({ state: 'visible', timeout: 24 * 60 * 60 * 1000 }).then(() => 'done'),
+      page.locator('.error[role=alert]').waitFor({ state: 'visible', timeout: 24 * 60 * 60 * 1000 }).then(() => 'error'),
+    ])
+    if (runCompleted === 'error') {
+      const errorText = await page.locator('.error[role=alert]').first().innerText()
+      throw new Error(errorText || 'CMAPLE inference failed.')
+    }
+
+    const inferDone = bench.findLast?.((fields) => fields.totalMs !== undefined && fields.newickChars !== undefined)
+      ?? [...bench].reverse().find((fields) => fields.totalMs !== undefined && fields.newickChars !== undefined)
+    const newickChars = Number(inferDone?.newickChars ?? Number.NaN)
+    if (Number.isFinite(newickChars) && newickChars <= 0) {
+      if (!allowEmptyTree) {
+        throw new Error('CMAPLE inference completed but returned an empty Newick tree.')
+      }
+      fs.writeFileSync(output, '')
+      const result = {
+        dataset,
+        output,
+        port,
+        bench,
+        downloadedSuggestedFilename: null,
+        emptyTree: true,
+      }
+      console.log(`BENCHMARK_RESULT\t${JSON.stringify(result)}`)
+      return
+    }
 
     const downloadPromise = page.waitForEvent('download')
     await page.getByRole('button', { name: /Download tree|Downloaded tree/ }).click()

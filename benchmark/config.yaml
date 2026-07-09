@@ -13,6 +13,23 @@ branch_support_replicates: 1000
 filter_divergent_samples: false
 max_divergence_percent: 6.7
 
+simulation_scaling:
+  sample_counts: [100, 1000, 10000]
+  sequence_lengths: [100, 1000, 10000, 100000]
+  diversity_rates: [1.0e-7, 1.0e-6, 1.0e-5, 1.0e-4]
+  baseline_sample_count: 1000
+  baseline_sequence_length: 10000
+  baseline_rate: 1.0e-5
+  threads: [1]
+  dataset_dir: benchmark/simulations/datasets
+  n_eff: 100
+  seed: 42
+  min_variable_sites: 1
+  max_attempts: 100
+  branch_support: false
+  branch_support_method: SPRTA
+  branch_support_replicates: 1000
+
 browser:
   host: 127.0.0.1
   start_port: 5173

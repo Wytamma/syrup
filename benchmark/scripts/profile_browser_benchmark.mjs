@@ -140,16 +140,13 @@ async function main() {
     await page.locator('input[type=file]').first().setInputFiles(dataset)
     await page.getByRole('button', { name: 'Run' }).waitFor({ state: 'visible', timeout: timeoutMs })
 
-    if (Number(args.threads ?? 4) !== 4) {
-      await page.locator('label.thread-option input[type=range]').fill(String(args.threads))
-    }
-
     const branchSupport = parseBool(args['branch-support'] ?? 'true')
     const branchSupportMethod = branchSupport ? (args['branch-support-method'] ?? 'sprta') : 'none'
     const branchSupportReplicates = Number(args.replicates ?? 1000)
     const filterDivergentSamples = parseBool(args['filter-divergent-samples'] ?? 'false')
     const maxDivergencePercent = Number(args['max-divergence-percent'] ?? 6.7)
     const needsAdvancedOptions =
+      args.threads !== undefined ||
       branchSupportMethod !== 'sprta' ||
       (branchSupportMethod === 'sh-alrt' && branchSupportReplicates !== 1000) ||
       filterDivergentSamples ||
@@ -157,6 +154,10 @@ async function main() {
 
     if (needsAdvancedOptions) {
       await page.locator('details.advanced-options summary').click()
+
+      if (args.threads !== undefined) {
+        await page.locator('label.thread-option input[type=range]').fill(String(args.threads))
+      }
 
       const branchSupportCheckbox = page.locator('.branch-support-option > input[type=checkbox]').first()
       if (branchSupportMethod !== 'none') {

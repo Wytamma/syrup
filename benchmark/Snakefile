@@ -11,6 +11,16 @@ LOGS_DIR = Path(config["logs_dir"])
 METRICS_DIR = Path(config["metrics_dir"])
 REPLICATES = [str(i) for i in range(1, int(config["replicates"]) + 1)]
 EXCLUDE_DATASETS = set(config.get("exclude_datasets", []))
+SIMULATION_SCALING = config.get("simulation_scaling", {})
+SIMULATION_SAMPLE_COUNTS = [str(n) for n in SIMULATION_SCALING.get("sample_counts", [10, 100, 1000, 10000])]
+SIMULATION_SEQUENCE_LENGTHS = [str(n) for n in SIMULATION_SCALING.get("sequence_lengths", [1000, 10000, 100000])]
+SIMULATION_DIVERSITY_RATES = [str(n) for n in SIMULATION_SCALING.get("diversity_rates", [1e-6, 1e-5, 1e-4, 1e-3])]
+SIMULATION_BASELINE_SAMPLE_COUNT = str(SIMULATION_SCALING.get("baseline_sample_count", 1000))
+SIMULATION_BASELINE_SEQUENCE_LENGTH = str(SIMULATION_SCALING.get("baseline_sequence_length", 10_000))
+SIMULATION_BASELINE_RATE = str(SIMULATION_SCALING.get("baseline_rate", 1e-5))
+SIMULATION_THREADS = [str(n) for n in SIMULATION_SCALING.get("threads", [1, 2, 4, 8])]
+SIMULATION_MAX_THREADS = max(int(n) for n in SIMULATION_THREADS)
+SIMULATION_DATASET_DIR = Path(SIMULATION_SCALING.get("dataset_dir", "benchmark/simulations/datasets"))
 DATASET_EXTENSIONS = ("*.fa", "*.fasta", "*.fna", "*.maple")
 DATASETS = {
     Path(path).stem: path
@@ -45,7 +55,24 @@ rule build_cmaple_cli:
         """
 
 
+rule build_cmaple_wasm_threaded:
+    output:
+        js="public/cmaple-threaded.js",
+        wasm="public/cmaple-threaded.wasm",
+    log:
+        LOGS_DIR / "build-cmaple-wasm-threaded.log",
+    shell:
+        """
+        mkdir -p {LOGS_DIR}
+        bash scripts/install-binaryen-wasm.sh > {log} 2>&1
+        bash scripts/build-cmaple-threaded.sh >> {log} 2>&1
+        """
+
+
 rule build_syrup_app:
+    input:
+        threaded_js="public/cmaple-threaded.js",
+        threaded_wasm="public/cmaple-threaded.wasm",
     output:
         "dist/index.html",
     log:
@@ -55,6 +82,181 @@ rule build_syrup_app:
         mkdir -p {LOGS_DIR}
         npm run build > {log} 2>&1
         """
+
+
+rule simulation_dataset:
+    output:
+        fasta=SIMULATION_DATASET_DIR / "{feature}/n-{samples}/l-{seq_length}/r-{rate}/rep-{rep}.fasta",
+    params:
+        n_eff=SIMULATION_SCALING.get("n_eff", 100),
+        min_variable_sites=SIMULATION_SCALING.get("min_variable_sites", 1),
+        max_attempts=SIMULATION_SCALING.get("max_attempts", 100),
+        seed=lambda wildcards: int(SIMULATION_SCALING.get("seed", 42)) + int(wildcards.rep) - 1,
+    log:
+        LOGS_DIR / "simulations/{feature}/n-{samples}/l-{seq_length}/r-{rate}/rep-{rep}.log",
+    shell:
+        """
+        mkdir -p $(dirname {output.fasta}) $(dirname {log})
+        pixi run --manifest-path benchmark/simulations/pixi.toml \
+          python benchmark/simulations/simulate.py \
+            --n-samples {wildcards.samples} \
+            --seq-length {wildcards.seq_length} \
+            --n-eff {params.n_eff} \
+            --rate {wildcards.rate} \
+            --seed {params.seed} \
+            --min-variable-sites {params.min_variable_sites} \
+            --max-attempts {params.max_attempts} \
+            --output {output.fasta} \
+          > {log} 2>&1
+        """
+
+
+rule simulation_wasm_run:
+    input:
+        app="dist/index.html",
+        dataset=SIMULATION_DATASET_DIR / "{feature}/n-{samples}/l-{seq_length}/r-{rate}/rep-{rep}.fasta",
+    output:
+        tree=RESULTS_DIR / "simulation-wasm/{feature}/n-{samples}/l-{seq_length}/r-{rate}/threads-{threads}/rep-{rep}.nwk",
+        metrics=METRICS_DIR / "simulation-wasm/{feature}/n-{samples}/l-{seq_length}/r-{rate}/threads-{threads}/rep-{rep}.json",
+    params:
+        branch_support="true" if SIMULATION_SCALING.get("branch_support", False) else "false",
+        branch_support_method=SIMULATION_SCALING.get("branch_support_method", "sprta"),
+        branch_support_replicates=SIMULATION_SCALING.get("branch_support_replicates", 1000),
+        hardware_concurrency=SIMULATION_MAX_THREADS,
+    log:
+        LOGS_DIR / "simulation-wasm/{feature}/n-{samples}/l-{seq_length}/r-{rate}/threads-{threads}/rep-{rep}.log",
+    shell:
+        """
+        mkdir -p $(dirname {output.tree}) $(dirname {output.metrics}) $(dirname {log})
+        python benchmark/scripts/measure_process.py \
+          --metrics {output.metrics} \
+          --log {log} \
+          -- \
+          node benchmark/scripts/run_browser_benchmark.mjs \
+            --dataset {input.dataset} \
+            --output {output.tree} \
+            --threads {wildcards.threads} \
+            --hardware-concurrency {params.hardware_concurrency} \
+            --branch-support {params.branch_support} \
+            --branch-support-method {params.branch_support_method} \
+            --replicates {params.branch_support_replicates} \
+            --filter-divergent-samples false \
+            --max-divergence-percent {config[max_divergence_percent]} \
+            --host {config[browser][host]} \
+            --start-port {config[browser][start_port]} \
+            --server-timeout-seconds {config[browser][server_timeout_seconds]}
+        """
+
+
+rule simulation_wasm_scaling_table:
+    input:
+        expand(
+            RESULTS_DIR / "simulation-wasm/samples/n-{samples}/l-{seq_length}/r-{rate}/threads-{threads}/rep-{rep}.nwk",
+            samples=SIMULATION_SAMPLE_COUNTS,
+            seq_length=[SIMULATION_BASELINE_SEQUENCE_LENGTH],
+            rate=[SIMULATION_BASELINE_RATE],
+            threads=SIMULATION_THREADS,
+            rep=REPLICATES,
+        ),
+        expand(
+            METRICS_DIR / "simulation-wasm/samples/n-{samples}/l-{seq_length}/r-{rate}/threads-{threads}/rep-{rep}.json",
+            samples=SIMULATION_SAMPLE_COUNTS,
+            seq_length=[SIMULATION_BASELINE_SEQUENCE_LENGTH],
+            rate=[SIMULATION_BASELINE_RATE],
+            threads=SIMULATION_THREADS,
+            rep=REPLICATES,
+        ),
+        expand(
+            RESULTS_DIR / "simulation-wasm/seq-length/n-{samples}/l-{seq_length}/r-{rate}/threads-{threads}/rep-{rep}.nwk",
+            samples=[SIMULATION_BASELINE_SAMPLE_COUNT],
+            seq_length=SIMULATION_SEQUENCE_LENGTHS,
+            rate=[SIMULATION_BASELINE_RATE],
+            threads=SIMULATION_THREADS,
+            rep=REPLICATES,
+        ),
+        expand(
+            METRICS_DIR / "simulation-wasm/seq-length/n-{samples}/l-{seq_length}/r-{rate}/threads-{threads}/rep-{rep}.json",
+            samples=[SIMULATION_BASELINE_SAMPLE_COUNT],
+            seq_length=SIMULATION_SEQUENCE_LENGTHS,
+            rate=[SIMULATION_BASELINE_RATE],
+            threads=SIMULATION_THREADS,
+            rep=REPLICATES,
+        ),
+        expand(
+            RESULTS_DIR / "simulation-wasm/diversity/n-{samples}/l-{seq_length}/r-{rate}/threads-{threads}/rep-{rep}.nwk",
+            samples=[SIMULATION_BASELINE_SAMPLE_COUNT],
+            seq_length=[SIMULATION_BASELINE_SEQUENCE_LENGTH],
+            rate=SIMULATION_DIVERSITY_RATES,
+            threads=SIMULATION_THREADS,
+            rep=REPLICATES,
+        ),
+        expand(
+            METRICS_DIR / "simulation-wasm/diversity/n-{samples}/l-{seq_length}/r-{rate}/threads-{threads}/rep-{rep}.json",
+            samples=[SIMULATION_BASELINE_SAMPLE_COUNT],
+            seq_length=[SIMULATION_BASELINE_SEQUENCE_LENGTH],
+            rate=SIMULATION_DIVERSITY_RATES,
+            threads=SIMULATION_THREADS,
+            rep=REPLICATES,
+        ),
+    output:
+        RESULTS_DIR / "simulation-wasm-scaling.tsv",
+    params:
+        samples=" ".join(SIMULATION_SAMPLE_COUNTS),
+        baseline_sample_count=SIMULATION_BASELINE_SAMPLE_COUNT,
+        baseline_sequence_length=SIMULATION_BASELINE_SEQUENCE_LENGTH,
+        baseline_rate=SIMULATION_BASELINE_RATE,
+        sequence_lengths=" ".join(SIMULATION_SEQUENCE_LENGTHS),
+        diversity_rates=" ".join(SIMULATION_DIVERSITY_RATES),
+        threads=" ".join(SIMULATION_THREADS),
+        replicates=" ".join(REPLICATES),
+    shell:
+        """
+        python benchmark/scripts/aggregate_simulation_scaling.py \
+          --samples {params.samples} \
+          --sequence-lengths {params.sequence_lengths} \
+          --diversity-rates {params.diversity_rates} \
+          --baseline-sample-count {params.baseline_sample_count} \
+          --baseline-sequence-length {params.baseline_sequence_length} \
+          --baseline-rate {params.baseline_rate} \
+          --threads {params.threads} \
+          --replicates {params.replicates} \
+          --dataset-dir {SIMULATION_DATASET_DIR} \
+          --metrics-dir {METRICS_DIR} \
+          --logs-dir {LOGS_DIR} \
+          --output {output}
+        """
+
+
+rule simulation_wasm_scaling_plot:
+    input:
+        RESULTS_DIR / "simulation-wasm-scaling.tsv",
+    output:
+        samples=RESULTS_DIR / "simulation-wasm-scaling-samples.svg",
+        seq_length=RESULTS_DIR / "simulation-wasm-scaling-seq-length.svg",
+        diversity=RESULTS_DIR / "simulation-wasm-scaling-diversity.svg",
+    shell:
+        """
+        python benchmark/scripts/plot_simulation_scaling.py \
+          --input {input} \
+          --feature samples \
+          --output {output.samples}
+        python benchmark/scripts/plot_simulation_scaling.py \
+          --input {input} \
+          --feature seq-length \
+          --output {output.seq_length}
+        python benchmark/scripts/plot_simulation_scaling.py \
+          --input {input} \
+          --feature diversity \
+          --output {output.diversity}
+        """
+
+
+rule simulation_wasm_scaling:
+    input:
+        RESULTS_DIR / "simulation-wasm-scaling.tsv",
+        RESULTS_DIR / "simulation-wasm-scaling-samples.svg",
+        RESULTS_DIR / "simulation-wasm-scaling-seq-length.svg",
+        RESULTS_DIR / "simulation-wasm-scaling-diversity.svg",
 
 
 rule cli_run:
