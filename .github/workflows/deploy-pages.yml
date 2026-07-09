@@ -28,14 +28,25 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Install documentation dependencies
+        run: python -m pip install mkdocs mkdocs-material
+
       - name: Build site
         run: npm run build
+
+      - name: Build documentation
+        run: mkdocs build --site-dir dist/docs
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
