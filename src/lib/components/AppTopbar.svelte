@@ -12,7 +12,7 @@
     <a class="docs-link" href="/?alignment=/B.1.429.maple">
       EXAMPLE
     </a>
-    <a class="docs-link" href="https://github.com/iqtree/cmaple/wiki/User-Manual" target="_blank" rel="noreferrer">
+    <a class="docs-link" href="/docs/" target="_blank" rel="noreferrer">
       DOCS
     </a>
     <button
