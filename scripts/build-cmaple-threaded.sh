@@ -87,13 +87,37 @@ fi
 
 mkdir -p public "$OBJECT_DIR"
 
+# Returns success (0) if $object needs to be (re)compiled from $source, taking
+# the header dependencies recorded in $depfile (see -MMD -MP below) into
+# account, not just $source's own mtime.
+needs_rebuild() {
+  local source="$1" object="$2" depfile="$3"
+  [ ! -f "$object" ] && return 0
+  [ "$0" -nt "$object" ] && return 0
+  [ "$source" -nt "$object" ] && return 0
+  if [ ! -f "$depfile" ]; then
+    # no recorded dependencies yet (e.g. object predates this tracking) -> be safe
+    return 0
+  fi
+  local dep
+  while IFS= read -r dep; do
+    [ -n "$dep" ] || continue
+    [ -f "$dep" ] || continue
+    if [ "$dep" -nt "$object" ]; then
+      return 0
+    fi
+  done < <(sed -e 's/^[^:]*://' -e 's/\\$//' "$depfile" | tr -s ' \t' '\n')
+  return 1
+}
+
 objects=()
 for index in "${!sources[@]}"; do
   source="${sources[$index]}"
   object="$OBJECT_DIR/${index}_$(basename "${source%.cpp}").o"
+  depfile="${object%.o}.d"
   objects+=("$object")
-  if [ ! -f "$object" ] || [ "$source" -nt "$object" ] || [ "$0" -nt "$object" ]; then
-    em++ "${common_flags[@]}" "$CMAPLE_COMPILE_OPT_LEVEL" -c "$source" -o "$object"
+  if needs_rebuild "$source" "$object" "$depfile"; then
+    em++ "${common_flags[@]}" "$CMAPLE_COMPILE_OPT_LEVEL" -MMD -MP -MF "$depfile" -c "$source" -o "$object"
   fi
 done
 
