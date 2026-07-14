@@ -22,7 +22,7 @@ For standard runs, Syrup downloads a `.nwk` file. The same Newick text can also 
 If **Infer mutations along each branch and output a mutation-annotated tree (MAT)** is enabled, Syrup downloads a `.mat.nex` file when CMAPLE returns NEXUS output.
 The interactive viewer displays inferred mutations on both internal and terminal branches. Copied Newick output retains the annotation comments used for these labels.
 
-![](assets/mat-dark.png)
+![](assets/screenshots/mat-dark.png)
 
 ## MAPLE alignment
 
