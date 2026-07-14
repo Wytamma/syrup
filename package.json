@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:wasm": "pixi run build-wasm",
-    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json"
+    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "test": "node --experimental-strip-types --test src/lib/phylocanvas/*.test.ts"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

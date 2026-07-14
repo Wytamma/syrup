@@ -2,12 +2,14 @@
   import { onDestroy, onMount } from 'svelte'
   import { PhylocanvasGL, TreeTypes, plugins } from '@phylocanvas/phylocanvas.gl'
   import type { PhylocanvasOptions } from '@phylocanvas/phylocanvas.gl'
+  import mutationBranchLabelsPlugin from '../phylocanvas/mutation-branch-labels'
 
   export let newick: string
   export let theme: 'dark' | 'light' = 'dark'
   export let placedSampleNames: string[] = []
   export let showInternalLabels = false
   export let showLeafLabels = true
+  export let showMutationLabels = true
 
   let container: HTMLDivElement
   let tree: {
@@ -35,13 +37,22 @@
     }
   }
 
-  function getThemeOptions(): Pick<PhylocanvasOptions, 'backgroundColour' | 'fillColour' | 'strokeColour' | 'fontColour'> {
+  function getThemeOptions(): Partial<PhylocanvasOptions> & { scalebar: any } {
     if (theme === 'dark') {
       return {
         backgroundColour: null,
         fillColour: [245, 245, 245, 255],
         strokeColour: [245, 245, 245, 255],
         fontColour: [229, 229, 229, 255],
+        scalebar: {
+          background: null,
+          fillColour: [245, 245, 245, 255],
+          strokeColour: [245, 245, 245, 255],
+          position: {
+            bottom: 10,
+            left: 10,
+          },
+        }
       }
     }
 
@@ -50,6 +61,15 @@
       fillColour: [34, 34, 34, 255],
       strokeColour: [34, 34, 34, 255],
       fontColour: [34, 34, 34, 255],
+      scalebar: {
+        background: null,
+        fillColour: [34, 34, 34, 255],
+        strokeColour: [34, 34, 34, 255],
+        position: {
+          bottom: 10,
+          left: 10,
+        },
+      }
     }
   }
 
@@ -81,6 +101,7 @@
       showLabels: true,
       showInternalLabels,
       showLeafLabels,
+      showMutationLabels,
       interactive: true,
       nodeSize: 10,
       styles: getPlacedSampleStyles(),
@@ -95,7 +116,7 @@
     if (!options) return
 
     if (!tree) {
-      tree = new PhylocanvasGL(container, options, [plugins.scalebar])
+      tree = new PhylocanvasGL(container, options, [plugins.scalebar, mutationBranchLabelsPlugin])
       if (tree.deck?.props) {
         tree.deck.props.useDevicePixels = 2
       }
@@ -127,7 +148,7 @@
     window.addEventListener('resize', handleResize)
   })
 
-  $: if (container && newick && theme !== undefined && placedSampleNames !== undefined && showInternalLabels !== undefined && showLeafLabels !== undefined) {
+  $: if (container && newick && theme !== undefined && placedSampleNames !== undefined && showInternalLabels !== undefined && showLeafLabels !== undefined && showMutationLabels !== undefined) {
     render()
   }
 

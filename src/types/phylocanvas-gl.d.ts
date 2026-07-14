@@ -6,6 +6,7 @@ declare module '@phylocanvas/phylocanvas.gl' {
     showLabels?: boolean
     showInternalLabels?: boolean
     showLeafLabels?: boolean
+    showMutationLabels?: boolean
     interactive?: boolean
     nodeSize?: number
     backgroundColour?: [number, number, number, number] | null
@@ -58,4 +59,7 @@ declare module '@phylocanvas/phylocanvas.gl' {
 
   export const PhylocanvasGL: PhylocanvasModule['PhylocanvasGL']
   export const plugins: PhylocanvasModule['plugins']
+  export const Newick: {
+    parse_newick: (input: string, parseNewickAnnotations?: (annotation: string) => unknown) => unknown
+  }
 }

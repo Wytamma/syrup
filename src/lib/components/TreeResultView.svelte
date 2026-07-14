@@ -9,6 +9,7 @@
   export let onToggleTheme: () => void = () => {}
 
   $: placedSampleNames = app.startingTreeText && app.startingAlignmentText ? (app.stats?.sampleNames ?? []) : []
+  $: hasMutationAnnotations = /mutationsInf\s*=/.test(app.newick)
 </script>
 
 <AppTopbar {theme} fixed={true} onToggleTheme={onToggleTheme} />
@@ -19,6 +20,7 @@
   {placedSampleNames}
   showInternalLabels={app.showInternalLabels}
   showLeafLabels={app.showLeafLabels}
+  showMutationLabels={app.showMutationLabels}
 />
 <div class="tree-dock">
   <div class="tree-toolbar">
@@ -27,6 +29,21 @@
       <span>{app.logLikelihood === null ? '' : `Log-likelihood ${Math.round(app.logLikelihood)}`}</span>
     </div>
     <div class="tree-actions">
+      {#if hasMutationAnnotations}
+        <button
+          type="button"
+          class="icon-button"
+          class:active={app.showMutationLabels}
+          aria-label={app.showMutationLabels ? 'Hide mutation labels' : 'Show mutation labels'}
+          aria-pressed={app.showMutationLabels}
+          title={app.showMutationLabels ? 'Hide mutation labels' : 'Show mutation labels'}
+          onclick={app.toggleMutationLabels}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+          </svg>
+        </button>
+      {/if}
       <button
         type="button"
         class="icon-button"

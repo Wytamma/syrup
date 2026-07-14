@@ -676,86 +676,6 @@ std::string resultJson(const std::string& newick,
   return out.str();
 }
 
-std::string extractSprtaValue(const std::string& comment) {
-  std::size_t pos = 0;
-  while ((pos = comment.find("sprta=", pos)) != std::string::npos) {
-    if (pos >= 6 && comment.substr(pos - 6, 6) == "input_") {
-      pos += 6;
-      continue;
-    }
-
-    std::size_t value_start = pos + 6;
-    std::size_t value_end = value_start;
-    while (value_end < comment.size() &&
-           comment[value_end] != ',' &&
-           comment[value_end] != ']' &&
-           comment[value_end] != '}') {
-      ++value_end;
-    }
-    return comment.substr(value_start, value_end - value_start);
-  }
-
-  return "";
-}
-
-std::string trimAscii(std::string value) {
-  const auto first = std::find_if(value.begin(), value.end(), [](unsigned char ch) {
-    return std::isspace(ch) == 0;
-  });
-  const auto last = std::find_if(value.rbegin(), value.rend(), [](unsigned char ch) {
-    return std::isspace(ch) == 0;
-  }).base();
-
-  if (first >= last) return "";
-  return std::string(first, last);
-}
-
-std::string extractMutationLabel(const std::string& comment) {
-  const std::string marker = "mutationsInf={";
-  std::size_t start = comment.find(marker);
-  if (start == std::string::npos) return "";
-  start += marker.size();
-
-  const std::size_t end = comment.find('}', start);
-  if (end == std::string::npos || end <= start) return "";
-
-  std::string label;
-  std::size_t entry_start = start;
-  while (entry_start < end) {
-    std::size_t entry_end = comment.find(',', entry_start);
-    if (entry_end == std::string::npos || entry_end > end) entry_end = end;
-
-    std::string entry = trimAscii(comment.substr(entry_start, entry_end - entry_start));
-    const std::size_t probability_start = entry.find(':');
-    if (probability_start != std::string::npos) {
-      entry = entry.substr(0, probability_start);
-    }
-    entry = trimAscii(entry);
-
-    if (!entry.empty()) {
-      if (!label.empty()) label += "|";
-      label += entry;
-    }
-
-    entry_start = entry_end + 1;
-  }
-
-  return label;
-}
-
-bool hasSuffix(const std::string& value, const std::string& suffix) {
-  return value.size() >= suffix.size() &&
-         value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
-
-bool isGeneratedInternalName(const std::string& label) {
-  if (hasSuffix(label, "_MinorSeqsClade")) return true;
-  if (label.size() < 2 || label[0] != 'i' || label[1] != 'n') return false;
-  return std::all_of(label.begin() + 2, label.end(), [](unsigned char ch) {
-    return std::isdigit(ch) != 0;
-  });
-}
-
 std::string extractTreeFromNexus(const std::string& nexus) {
   const std::string marker = "tree TREE1 = [&R] ";
   std::size_t start = nexus.find(marker);
@@ -766,146 +686,6 @@ std::string extractTreeFromNexus(const std::string& nexus) {
   if (end == std::string::npos) end = nexus.size();
 
   return nexus.substr(start, end - start);
-}
-
-std::string stripNexusAnnotations(std::string tree) {
-  std::size_t read = 0;
-  std::size_t write = 0;
-  int bracket_depth = 0;
-
-  while (read < tree.size()) {
-    const char ch = tree[read++];
-    if (ch == '[') {
-      ++bracket_depth;
-      continue;
-    }
-    if (bracket_depth > 0) {
-      if (ch == ']') --bracket_depth;
-      continue;
-    }
-    tree[write++] = ch;
-  }
-
-  tree.resize(write);
-  return tree;
-}
-
-void removeGeneratedInternalNames(std::string& tree) {
-  std::size_t search_from = 0;
-  while ((search_from = tree.find(')', search_from)) != std::string::npos) {
-    const std::size_t label_start = search_from + 1;
-    std::size_t label_end = label_start;
-    while (label_end < tree.size() &&
-           tree[label_end] != ':' &&
-           tree[label_end] != ',' &&
-           tree[label_end] != ')' &&
-           tree[label_end] != ';') {
-      ++label_end;
-    }
-
-    if (label_end < tree.size() && tree[label_end] == ':') {
-      const std::string label = tree.substr(label_start, label_end - label_start);
-      if (isGeneratedInternalName(label)) {
-        tree.erase(label_start, label_end - label_start);
-        search_from = label_start;
-        continue;
-      }
-    }
-
-    search_from = label_end;
-  }
-}
-
-std::string nexusToDisplayNewick(const std::string& nexus) {
-  std::string tree = stripNexusAnnotations(extractTreeFromNexus(nexus));
-  removeGeneratedInternalNames(tree);
-  return tree;
-}
-
-std::string matNexusToMutationNewick(const std::string& nexus) {
-  std::string tree = extractTreeFromNexus(nexus);
-  if (tree.empty()) return "";
-
-  std::size_t comment_start = 0;
-  while ((comment_start = tree.find("[&", comment_start)) != std::string::npos) {
-    std::size_t comment_end = tree.find(']', comment_start);
-    if (comment_end == std::string::npos) break;
-
-    const std::string comment =
-        tree.substr(comment_start, comment_end - comment_start + 1);
-    const std::string mutation_label = extractMutationLabel(comment);
-
-    std::size_t colon = tree.rfind(':', comment_start);
-    std::size_t label_start = std::string::npos;
-    bool is_internal_branch = false;
-    if (colon != std::string::npos) {
-      const std::size_t delimiter = tree.find_last_of("(,)", colon);
-      label_start = delimiter == std::string::npos ? 0 : delimiter + 1;
-      is_internal_branch = delimiter != std::string::npos && tree[delimiter] == ')';
-    }
-
-    if (!mutation_label.empty() && is_internal_branch &&
-        colon != std::string::npos && label_start != std::string::npos) {
-      const std::string label = tree.substr(label_start, colon - label_start);
-      if (label.empty() || isGeneratedInternalName(label)) {
-        tree.replace(label_start, colon - label_start, mutation_label);
-        const std::ptrdiff_t label_delta =
-            static_cast<std::ptrdiff_t>(mutation_label.size()) -
-            static_cast<std::ptrdiff_t>(label.size());
-        comment_start = static_cast<std::size_t>(
-            static_cast<std::ptrdiff_t>(comment_start) + label_delta);
-        comment_end = static_cast<std::size_t>(
-            static_cast<std::ptrdiff_t>(comment_end) + label_delta);
-      }
-    }
-
-    tree.erase(comment_start, comment_end - comment_start + 1);
-  }
-
-  removeGeneratedInternalNames(tree);
-  return tree;
-}
-
-std::string sprtaNexusToSupportNewick(const std::string& nexus) {
-  std::string tree = extractTreeFromNexus(nexus);
-  if (tree.empty()) return "";
-
-  std::size_t comment_start = 0;
-  while ((comment_start = tree.find("[&", comment_start)) != std::string::npos) {
-    std::size_t comment_end = tree.find(']', comment_start);
-    if (comment_end == std::string::npos) break;
-
-    const std::string comment =
-        tree.substr(comment_start, comment_end - comment_start + 1);
-    const std::string sprta = extractSprtaValue(comment);
-
-    std::size_t colon = tree.rfind(':', comment_start);
-    std::size_t label_start = std::string::npos;
-    if (colon != std::string::npos) {
-      const std::size_t delimiter = tree.find_last_of("(,)", colon);
-      label_start = delimiter == std::string::npos ? 0 : delimiter + 1;
-    }
-
-    if (!sprta.empty() && colon != std::string::npos &&
-        label_start != std::string::npos) {
-      const std::string label = tree.substr(label_start, colon - label_start);
-      if (isGeneratedInternalName(label)) {
-        tree.replace(label_start, colon - label_start, sprta);
-        const std::ptrdiff_t label_delta =
-            static_cast<std::ptrdiff_t>(sprta.size()) -
-            static_cast<std::ptrdiff_t>(label.size());
-        comment_start = static_cast<std::size_t>(
-            static_cast<std::ptrdiff_t>(comment_start) + label_delta);
-        comment_end = static_cast<std::size_t>(
-            static_cast<std::ptrdiff_t>(comment_end) + label_delta);
-      }
-    }
-
-    tree.erase(comment_start, comment_end - comment_start + 1);
-  }
-
-  removeGeneratedInternalNames(tree);
-  return tree;
 }
 
 bool isUnrecognizedCharacterError(const std::exception& err) {
@@ -1331,15 +1111,15 @@ std::string inferAlignment(cmaple::Alignment& alignment,
   std::string newick;
   std::string nexus;
   if (estimate_mat != 0) {
-    nexus = tree->exportNexus(cmaple::Tree::BIN_TREE, false, true);
-    newick = matNexusToMutationNewick(nexus);
+    nexus = tree->exportNexus(cmaple::Tree::BIN_TREE, true, true);
+    newick = extractTreeFromNexus(nexus);
     if (newick.empty()) {
       newick = tree->exportNewick(cmaple::Tree::BIN_TREE, false, true);
     }
   } else if (compute_sprta) {
     const std::string nexus =
         tree->exportNexus(cmaple::Tree::BIN_TREE, true, false);
-    newick = sprtaNexusToSupportNewick(nexus);
+    newick = extractTreeFromNexus(nexus);
     if (newick.empty()) {
       newick = tree->exportNewick(cmaple::Tree::BIN_TREE, false, true);
     }

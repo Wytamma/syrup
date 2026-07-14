@@ -98,6 +98,7 @@ export function createCmapleApp() {
     logLikelihood: null as number | null,
     showInternalLabels: false,
     showLeafLabels: true,
+    showMutationLabels: true,
     elapsedMs: 0,
     didCopyNewick: false,
     didDownloadNewick: false,
@@ -160,6 +161,7 @@ export function createCmapleApp() {
     downloadMaple,
     toggleInternalLabels,
     toggleLeafLabels,
+    toggleMutationLabels,
     returnToRunSettings,
   })
 
@@ -437,6 +439,7 @@ export function createCmapleApp() {
     app.logLikelihood = null
     app.showInternalLabels = false
     app.showLeafLabels = true
+    app.showMutationLabels = true
     app.didCopyNewick = false
     app.didDownloadNewick = false
     app.isExportingMaple = false
@@ -593,6 +596,10 @@ export function createCmapleApp() {
 
   function toggleLeafLabels() {
     app.showLeafLabels = !app.showLeafLabels
+  }
+
+  function toggleMutationLabels() {
+    app.showMutationLabels = !app.showMutationLabels
   }
 
   function returnToRunSettings() {
@@ -783,6 +790,7 @@ export function createCmapleApp() {
       flushLogLines()
       app.newick = message.newick
       app.nexus = message.nexus ?? ''
+      app.showMutationLabels = true
       app.logLikelihood = message.logLikelihood
       app.effective = message.effective
       app.effectiveStatus = message.effective
