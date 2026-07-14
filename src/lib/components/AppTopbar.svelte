@@ -7,7 +7,7 @@
 </script>
 
 <header class:tree-topbar={fixed} class="app-topbar">
-  <a class="brandmark" href="/">SYRUP</a>
+  <a class="brandmark" href="/">SYRUP v{__APP_VERSION__}</a>
   <div class="app-topbar-actions">
     <a class="docs-link" href="/?alignment=/B.1.429.maple">
       EXAMPLE
