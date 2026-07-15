@@ -16,6 +16,7 @@
   import DivergenceQualityFilter from './DivergenceQualityFilter.svelte'
   import StartingTreeOption from './StartingTreeOption.svelte'
   import SubstitutionModelOption from './SubstitutionModelOption.svelte'
+  import ThreadsOption from './ThreadsOption.svelte'
   import TreeSearchOption from './TreeSearchOption.svelte'
 
   export let state: AppState
@@ -191,13 +192,15 @@
           method={branchSupportMethod}
           replicates={branchSupportReplicates}
           epsilon={branchSupportEpsilon}
-          threads={numThreads}
-          {maxThreads}
           disabled={state === 'running'}
-          threadsDisabled={state === 'running' || !crossOriginIsolated}
           onMethodChange={onBranchSupportMethodChange}
           onReplicatesChange={onBranchSupportReplicatesChange}
           onEpsilonChange={onBranchSupportEpsilonChange}
+        />
+        <ThreadsOption
+          threads={numThreads}
+          {maxThreads}
+          disabled={state === 'running' || !crossOriginIsolated}
           onThreadsChange={onNumThreadsChange}
         />
       </div>

@@ -4,14 +4,10 @@
   export let method: BranchSupportMethod = 'sprta'
   export let replicates = 1000
   export let epsilon = 0.1
-  export let threads = 1
-  export let maxThreads = 1
   export let disabled = false
-  export let threadsDisabled = false
   export let onMethodChange: (value: BranchSupportMethod) => void = () => {}
   export let onReplicatesChange: (value: number) => void = () => {}
   export let onEpsilonChange: (value: number) => void = () => {}
-  export let onThreadsChange: (value: number) => void = () => {}
 
   function setEnabled(enabled: boolean) {
     onMethodChange(enabled ? 'sprta' : 'none')
@@ -48,20 +44,6 @@
       </div>
       {#if method === 'sh-alrt'}
         <div class="branch-support-alrt-options">
-          <label class="thread-option branch-support-thread-option">
-            <span>Threads</span>
-            <div class="branch-support-thread-control">
-              <input
-                type="range"
-                min="1"
-                max={maxThreads}
-                value={threads}
-                disabled={threadsDisabled}
-                oninput={(event) => onThreadsChange(Number(event.currentTarget.value))}
-              />
-              <strong>{threads}</strong>
-            </div>
-          </label>
           <label>
             <span>Replicates</span>
             <input

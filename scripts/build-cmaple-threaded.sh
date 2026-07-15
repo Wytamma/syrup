@@ -36,6 +36,10 @@ CMAPLE_MAXIMUM_MEMORY_BYTES="${CMAPLE_MAXIMUM_MEMORY_BYTES:-2147483648}"
 # Emscripten's default stack size is 64 KB which is too small for the larger alignments
 CMAPLE_STACK_SIZE_BYTES="${CMAPLE_STACK_SIZE_BYTES:-67108864}"
 CMAPLE_PROFILE_LOGS="${CMAPLE_PROFILE_LOGS:-0}"
+# dlmalloc (Emscripten's default) uses a coarse global lock across pthreads;
+# mimalloc uses thread-local heaps and scales far better under concurrent
+# allocation.
+CMAPLE_MALLOC="${CMAPLE_MALLOC:-mimalloc}"
 
 sources=(
   src/wasm/cmaple_wasm.cpp
@@ -128,6 +132,7 @@ em++ \
   "${objects[@]}" \
   "$LIBOMP_A" \
   -sUSE_PTHREADS=1 \
+  -sMALLOC="$CMAPLE_MALLOC" \
   -sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency \
   -sMODULARIZE=1 \
   -sEXPORT_ES6=1 \
