@@ -27,7 +27,13 @@ Branch support can be disabled or computed with:
 - `SPRTA`;
 - `SH-aLRT`.
 
-For `SH-aLRT`, Syrup also exposes replicates, epsilon, and thread count. Increasing the number of threads can speed up the computation dramatically.
+For `SH-aLRT`, Syrup also exposes replicates and epsilon.
+
+## Inference threads
+
+Syrup can use multiple browser threads for CMAPLE inference. Use the **Threads** slider to choose how many threads to use; the available range depends on the hardware and browser. Increasing the number of threads can reduce runtime, particularly for large alignments.
+
+Threaded execution requires the browser page to be cross-origin isolated. If the required browser security headers are unavailable, Syrup disables the thread control and runs with one thread.
 
 ## Tree search type
 

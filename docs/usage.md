@@ -29,6 +29,7 @@ The default settings are intended for a standard CMAPLE run:
 - Protein alignments use `LG` by default.
 - Branch support is enabled with `SPRTA` by default.
 - Tree search uses `NORMAL` by default.
+- CMAPLE inference uses one thread by default; additional threads can be selected with the **Threads** slider when supported by the browser.
 
 Open **Advanced Options** when you need a starting tree, a different tree search mode, constant-site counts, a mutation-annotated tree, or divergence filtering.
 

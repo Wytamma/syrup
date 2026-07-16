@@ -11,6 +11,7 @@ SYRUP is a browser-based application for privacy-preserving, installation-free p
 - Accepts aligned FASTA, PHYLIP, and MAPLE files.
 - Performs preflight checks for sequence count, alignment length, variable columns, and CMAPLE suitability.
 - Runs maximum likelihood-based CMAPLE inference in the browser using WebAssembly.
+- Supports configurable threaded CMAPLE inference when the browser provides cross-origin isolation.
 - Supports branch support settings, starting trees, sample filtering, constant-site counts, and MAPLE export.
 - Renders inferred trees interactively and supports Newick copy/download.
 - Keeps alignment and tree files local to the user's browser.
