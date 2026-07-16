@@ -1088,8 +1088,7 @@ std::string inferAlignment(cmaple::Alignment& alignment,
   if (compute_sprta) {
     std::cout << "Computing SPRTA supports" << std::endl;
   }
-  const int inference_threads = 1;
-  tree->infer(inference_threads,
+  tree->infer(num_threads,
              compute_sprta ? cmaple::Tree::EXHAUSTIVE_TREE_SEARCH
                             : selected_tree_search,
              false,

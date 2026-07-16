@@ -2,7 +2,7 @@
 authors = ["Wytamma Wirth <wytamma.wirth@me.com>"]
 channels = ["conda-forge", "bioconda"]
 name = "syrup"
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-64"]
 version = "0.1.0"
 
 [tasks]
