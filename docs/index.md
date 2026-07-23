@@ -2,6 +2,13 @@
 
 [Syrup](https://syrup.cpg.org.au) is a browser app for running [CMAPLE](https://github.com/iqtree/cmaple/wiki/User-Manual) phylogenetic inference without installing command-line software. It accepts FASTA, PHYLIP, and MAPLE alignments, checks whether the data are suitable for CMAPLE, runs inference in WebAssembly, and shows the tree in the browser.
 
+## Examples
+
+- [Measles](https://syrup.cpg.org.au/?alignment=https%3A%2F%2Fraw.githubusercontent.com%2FWytamma%2Fsyrup%2Frefs%2Fheads%2Fmain%2Fbenchmark%2Fsyrup-datasets%2Fmeasles_aligned-nuc_2026-05-21T0015.2.maple)
+- [H5N1 Cattle Outbreak](https://syrup.cpg.org.au/?alignment=https%3A%2F%2Fraw.githubusercontent.com%2FWytamma%2Fsyrup%2Frefs%2Fheads%2Fmain%2Fbenchmark%2Fsyrup-datasets%2Fnextstrain_avian-flu_h5n1-cattle-outbreak_genome_metadata.maple)
+- [Staphylococcus aureus](https://syrup.cpg.org.au/?alignment=https%3A%2F%2Fraw.githubusercontent.com%2FWytamma%2Fsyrup%2Frefs%2Fheads%2Fmain%2Fbenchmark%2Fsyrup-datasets%2Fstaph-tong-et-al-2015.maple)
+- [Vibrio cholerae](https://syrup.cpg.org.au/?alignment=https%3A%2F%2Fraw.githubusercontent.com%2FWytamma%2Fsyrup%2Frefs%2Fheads%2Fmain%2Fbenchmark%2Fsyrup-datasets%2Fvibriowatch-collection-hendriksen-et-al-2011.maple)
+
 ## When to use Syrup
 
 Use Syrup when you need fast, installation-free phylogenetic inference for closely related pathogen genomes. It is designed for genomic surveillance, teaching, and privacy-sensitive analysis where you want to keep alignment data on your own computer while still using likelihood-based inference at large epidemiological scale.
