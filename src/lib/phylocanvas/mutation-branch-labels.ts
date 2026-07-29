@@ -8,6 +8,9 @@ import {
   getMutationBranchNodes,
   getMutationBranchPosition,
   getMutationBranchText,
+  getSprtaBranchSupportNodes,
+  getSprtaBranchSupportPosition,
+  getSprtaBranchSupportText,
   type MutationBranchGraph,
   type MutationBranchNode,
 } from './mutation-branch-label-data'
@@ -45,7 +48,7 @@ function createRenderer() {
       fontFamily: tree.getFontFamily(),
       getAlignmentBaseline: 'bottom',
       getColor: tree.props.fontColour ?? [51, 51, 51, 255],
-      getPixelOffset: [0, -fontSize / 3],
+      getPixelOffset: [0, -fontSize / 8],
       getPosition: getMutationBranchPosition,
       getSize: fontSize,
       getText: getMutationBranchText,
@@ -81,6 +84,29 @@ function createSupportRenderer() {
   }
 }
 
+function createSprtaSupportRenderer() {
+  return (tree: MutationLabelsTree) => {
+    const fontSize = tree.getFontSize() * 0.65
+    return new TextLayer<MutationBranchNode>({
+      id: 'sprta-branch-support-labels',
+      data: getSprtaBranchSupportNodes(tree.getGraphAfterLayout()),
+      fontFamily: tree.getFontFamily(),
+      getAlignmentBaseline: 'top',
+      getColor: tree.props.fontColour ?? [51, 51, 51, 255],
+      getPixelOffset: [0, fontSize / 8],
+      getPosition: getSprtaBranchSupportPosition,
+      getSize: fontSize,
+      getText: getSprtaBranchSupportText,
+      getTextAnchor: 'middle',
+      updateTriggers: {
+        getColor: tree.props.fontColour,
+        getPixelOffset: fontSize,
+        getSize: fontSize,
+      },
+    })
+  }
+}
+
 export default function mutationBranchLabelsPlugin(tree: MutationLabelsTree, decorate: Decorate) {
   decorate('init', (delegate, args) => {
     Newick.parse_newick = (
@@ -97,6 +123,11 @@ export default function mutationBranchLabelsPlugin(tree: MutationLabelsTree, dec
       'annotation-support-labels',
       (props) => props.showLabels === true && props.showInternalLabels === true,
       createSupportRenderer,
+    )
+    tree.addLayer(
+      'sprta-branch-support-labels',
+      (props) => props.showLabels === true && props.showInternalLabels === true,
+      createSprtaSupportRenderer,
     )
     return result
   })

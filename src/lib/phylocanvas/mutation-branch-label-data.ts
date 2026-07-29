@@ -37,13 +37,29 @@ export function getMutationBranchText(node: MutationBranchNode) {
   return node.annotations?.mutationsInf?.join(' | ') ?? ''
 }
 
+export function getSprtaBranchSupportNodes(graph: MutationBranchGraph) {
+  const start = (graph.root.preIndex ?? 0) + 1
+  const end = start + Math.max(0, (graph.root.totalNodes ?? graph.preorderTraversal.length) - 1)
+
+  return graph.preorderTraversal
+    .slice(start, end)
+    .filter((node) => !node.isHidden && node.parent && node.annotations?.sprta !== undefined)
+}
+
+export function getSprtaBranchSupportPosition(node: MutationBranchNode): [number, number] {
+  return getMutationBranchPosition(node)
+}
+
+export function getSprtaBranchSupportText(node: MutationBranchNode) {
+  return node.annotations?.sprta?.toString() ?? ''
+}
+
 export function getAnnotationSupportNodes(graph: MutationBranchGraph) {
   const start = graph.root.preIndex ?? 0
   const end = start + (graph.root.totalNodes ?? graph.preorderTraversal.length)
 
   return graph.preorderTraversal.slice(start, end).filter((node) => {
-    const support = node.annotations?.sprta ?? node.annotations?.sh_alrt
-    return !node.isLeaf && !node.isHidden && !node.name && support !== undefined
+    return !node.isLeaf && !node.isHidden && !node.name && node.annotations?.sh_alrt !== undefined
   })
 }
 
@@ -52,5 +68,5 @@ export function getAnnotationSupportPosition(node: MutationBranchNode): [number,
 }
 
 export function getAnnotationSupportText(node: MutationBranchNode) {
-  return (node.annotations?.sprta ?? node.annotations?.sh_alrt)?.toString() ?? ''
+  return node.annotations?.sh_alrt?.toString() ?? ''
 }

@@ -7,6 +7,9 @@ import {
   getMutationBranchNodes,
   getMutationBranchPosition,
   getMutationBranchText,
+  getSprtaBranchSupportNodes,
+  getSprtaBranchSupportPosition,
+  getSprtaBranchSupportText,
   type MutationBranchNode,
 } from './mutation-branch-label-data.ts'
 
@@ -49,13 +52,13 @@ test('positions a label at the midpoint of its incoming rectangular branch', () 
   assert.deepEqual(getMutationBranchPosition(zeroLengthNode), [2, 7])
 })
 
-test('selects annotation support for unnamed visible internal nodes with SPRTA precedence', () => {
+test('selects SH-aLRT support for unnamed visible internal nodes', () => {
   const root: MutationBranchNode = { x: 0, y: 1, preIndex: 0, totalNodes: 4 }
-  const sprta: MutationBranchNode = {
+  const sprtaOnly: MutationBranchNode = {
     x: 2,
     y: 1,
     parent: root,
-    annotations: { sprta: 0.95, sh_alrt: 87.4 },
+    annotations: { sprta: 0.95 },
   }
   const shAlrt: MutationBranchNode = {
     x: 3,
@@ -71,11 +74,46 @@ test('selects annotation support for unnamed visible internal nodes with SPRTA p
     annotations: { sprta: 0.5 },
   }
 
-  assert.deepEqual(getAnnotationSupportNodes({ root, preorderTraversal: [root, sprta, shAlrt, named] }), [
-    sprta,
-    shAlrt,
-  ])
-  assert.equal(getAnnotationSupportText(sprta), '0.95')
+  assert.deepEqual(getAnnotationSupportNodes({ root, preorderTraversal: [root, sprtaOnly, shAlrt, named] }), [shAlrt])
   assert.equal(getAnnotationSupportText(shAlrt), '91.2')
-  assert.deepEqual(getAnnotationSupportPosition(sprta), [2, 1])
+  assert.deepEqual(getAnnotationSupportPosition(shAlrt), [3, 2])
+})
+
+test('selects SPRTA support for visible internal and terminal branches', () => {
+  const root: MutationBranchNode = { x: 0, y: 1, preIndex: 0, totalNodes: 5 }
+  const internal: MutationBranchNode = {
+    x: 4,
+    y: 1,
+    parent: root,
+    annotations: { sprta: 0.95, sh_alrt: 87.4 },
+  }
+  const terminal: MutationBranchNode = {
+    x: 8,
+    y: 2,
+    parent: internal,
+    isLeaf: true,
+    annotations: { sprta: 0.82 },
+  }
+  const hiddenTerminal: MutationBranchNode = {
+    x: 8,
+    y: 3,
+    parent: internal,
+    isHidden: true,
+    isLeaf: true,
+    annotations: { sprta: 0.1 },
+  }
+  const shAlrtOnly: MutationBranchNode = {
+    x: 6,
+    y: 4,
+    parent: root,
+    annotations: { sh_alrt: 91.2 },
+  }
+
+  assert.deepEqual(
+    getSprtaBranchSupportNodes({ root, preorderTraversal: [root, internal, terminal, hiddenTerminal, shAlrtOnly] }),
+    [internal, terminal],
+  )
+  assert.equal(getSprtaBranchSupportText(internal), '0.95')
+  assert.equal(getSprtaBranchSupportText(terminal), '0.82')
+  assert.deepEqual(getSprtaBranchSupportPosition(terminal), [6, 2])
 })
