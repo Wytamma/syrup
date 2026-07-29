@@ -221,6 +221,37 @@ export function removeGeneratedInternalNames(node: NewickNode) {
   return node
 }
 
+function hasSameMutations(left?: string[], right?: string[]) {
+  return left !== undefined && right !== undefined && left.join('\0') === right.join('\0')
+}
+
+function removeEmptyAnnotations(node: NewickNode) {
+  if (node.annotations && Object.keys(node.annotations).length === 0) {
+    delete node.annotations
+  }
+}
+
+export function removeInheritedZeroLengthTerminalMutations(
+  node: NewickNode,
+  parentMutationAncestor?: NewickNode,
+) {
+  if (
+    !node.children
+    && node.branch_length === 0
+    && hasSameMutations(node.annotations?.mutationsInf, parentMutationAncestor?.annotations?.mutationsInf)
+  ) {
+    delete node.annotations?.mutationsInf
+    removeEmptyAnnotations(node)
+  }
+
+  const mutationAncestor = node.annotations?.mutationsInf
+    ? node
+    : node.branch_length === 0 ? parentMutationAncestor : undefined
+
+  node.children?.forEach((child) => removeInheritedZeroLengthTerminalMutations(child, mutationAncestor))
+  return node
+}
+
 export function parseCmapleNewick(input: string) {
-  return removeGeneratedInternalNames(parseNewick(input, parseCmapleAnnotations))
+  return removeInheritedZeroLengthTerminalMutations(removeGeneratedInternalNames(parseNewick(input, parseCmapleAnnotations)))
 }

@@ -43,6 +43,38 @@ test('preserves user internal names while removing CMAPLE generated names', () =
   assert.equal(tree.children?.[1].name, 'clade')
 })
 
+test('removes mutations copied to zero-length terminal leaves by CMAPLE NEXUS export', () => {
+  const tree = parseCmapleNewick(
+    '((A:0[&mutationsInf={G4207T:1}],B:0[&mutationsInf={G4207T:1}])in2:0[&mutationsInf={G4207T:1}],C:0[&mutationsInf={C635T:1}])in1:1[&mutationsInf={G4207T:1}];',
+  )
+
+  assert.equal(tree.annotations?.mutationsInf?.[0], 'G4207T')
+  assert.equal(tree.children?.[0].annotations?.mutationsInf?.[0], 'G4207T')
+  assert.equal(tree.children?.[0].children?.[0].annotations, undefined)
+  assert.equal(tree.children?.[0].children?.[1].annotations, undefined)
+  assert.deepEqual(tree.children?.[1].annotations?.mutationsInf, ['C635T'])
+})
+
+test('removes copied mutations through zero-length binary less-info ladders', () => {
+  const tree = parseCmapleNewick(
+    '((A:0[&mutationsInf={T23155C:1}],B:0[&mutationsInf={T23155C:1}])0:0,C:0[&mutationsInf={T23155C:1}])SRR1764070_MinorSeqsClade:1[&mutationsInf={T23155C:1}];',
+  )
+
+  assert.equal(tree.annotations?.mutationsInf?.[0], 'T23155C')
+  assert.equal(tree.children?.[0].annotations, undefined)
+  assert.equal(tree.children?.[0].children?.[0].annotations, undefined)
+  assert.equal(tree.children?.[0].children?.[1].annotations, undefined)
+  assert.equal(tree.children?.[1].annotations, undefined)
+})
+
+test('preserves support on zero-length terminal leaves when removing copied mutations', () => {
+  const tree = parseCmapleNewick(
+    '(A:0[&sprta=0.999,mutationsInf={G4207T:1}])in1:1[&mutationsInf={G4207T:1}];',
+  )
+
+  assert.deepEqual(tree.children?.[0].annotations, { sprta: 0.999 })
+})
+
 test('uses the default and custom annotation parsers', () => {
   assert.equal(parseNewick('A:1[first];').comment, 'first')
 
