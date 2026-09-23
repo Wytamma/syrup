@@ -103,7 +103,7 @@ export function createCmapleApp() {
     didCopyNewick: false,
     didDownloadNewick: false,
     isExportingMaple: false,
-    numThreads: 1,
+    numThreads: Math.max(1, Math.floor((navigator.hardwareConcurrency || 1) / 2)),
     maxThreads: Math.max(1, navigator.hardwareConcurrency || 1),
     substitutionModel: 'GTR' as SubstitutionModel,
     branchSupportMethod: 'sprta' as BranchSupportMethod,
