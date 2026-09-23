@@ -5,10 +5,11 @@
   export let onThreadsChange: (value: number) => void = () => {}
 </script>
 
-<div class="option-group">
+<div class="option-group thread-option">
   <span>Threads</span>
   <div class="branch-support-thread-control">
     <input
+      aria-label="Threads"
       type="range"
       min="1"
       max={maxThreads}
