@@ -43,6 +43,17 @@ test('preserves user internal names while removing CMAPLE generated names', () =
   assert.equal(tree.children?.[1].name, 'clade')
 })
 
+test('removes CMAPLE minor-sequence clade names with appended support', () => {
+  const tree = parseCmapleNewick(
+    '((A:0,B:0)0:0,C:0)SRR1763909_MinorSeqsClade/0:1[&sh_alrt=92.3];',
+  )
+
+  assert.equal(tree.name, undefined)
+  assert.equal(tree.children?.[0].name, undefined)
+  assert.equal(tree.children?.[1].name, 'C')
+  assert.equal(tree.annotations?.sh_alrt, 92.3)
+})
+
 test('removes mutations copied to zero-length terminal leaves by CMAPLE NEXUS export', () => {
   const tree = parseCmapleNewick(
     '((A:0[&mutationsInf={G4207T:1}],B:0[&mutationsInf={G4207T:1}])in2:0[&mutationsInf={G4207T:1}],C:0[&mutationsInf={C635T:1}])in1:1[&mutationsInf={G4207T:1}];',

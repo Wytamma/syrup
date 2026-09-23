@@ -210,11 +210,20 @@ export function parseCmapleAnnotations(annotation: string) {
 }
 
 export function isGeneratedInternalName(name: string) {
-  return /^in\d+$/.test(name) || name.endsWith('_MinorSeqsClade')
+  return /^in\d+(?:\/-?(?:\d+\.?\d*|\.\d+))?$/.test(name)
+    || /_MinorSeqsClade(?:\/-?(?:\d+\.?\d*|\.\d+))?$/.test(name)
+}
+
+function isGeneratedZeroLengthSupportName(node: NewickNode) {
+  return node.branch_length === 0 && typeof node.name === 'string' && /^-?(?:\d+\.?\d*|\.\d+)$/.test(node.name)
 }
 
 export function removeGeneratedInternalNames(node: NewickNode) {
-  if (node.children && typeof node.name === 'string' && isGeneratedInternalName(node.name)) {
+  if (
+    node.children
+    && typeof node.name === 'string'
+    && (isGeneratedInternalName(node.name) || isGeneratedZeroLengthSupportName(node))
+  ) {
     delete node.name
   }
   node.children?.forEach(removeGeneratedInternalNames)
