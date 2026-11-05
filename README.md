@@ -73,29 +73,6 @@ uses npm trusted publishing: GitHub's OIDC identity is exchanged for a
 short-lived publish token, and npm generates provenance automatically. It runs
 on `maple-wasm-v*` tags or manual dispatch. No `NPM_TOKEN` secret is needed.
 
-One-time setup:
-
-1. On npmjs.com → `@wytamma/maple-wasm` → Settings → Trusted publishing, add:
-   - Provider: GitHub Actions
-   - Organization or user: `Wytamma`
-   - Repository: `syrup`
-   - Workflow filename: `publish-wasm-package.yml`
-   - Environment: leave empty
-   - Allowed actions: enable **Allow npm publish** (new configurations only
-     permit staged publishing by default)
-
-2. Push a `maple-wasm-v<version>` tag matching
-   `packages/maple-wasm/package.json`, or run the workflow manually. The
-   workflow refuses to publish when the tag and package version differ. The
-   first OIDC publish must succeed within 2 days of saving the trusted
-   publisher, or the configuration expires and must be recreated.
-
-After the first OIDC release, set the package's Publishing access to
-“Require two-factor authentication and disallow tokens”.
-
-The workflow uses Node 24 and installs npm >= 11.5.1, both required by trusted
-publishing.
-
 ### Available `pixi` tasks
 
 - `pixi run install-binaryen`

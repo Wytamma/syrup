@@ -22,7 +22,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
+          # No registry-url: setup-node would write a placeholder NODE_AUTH_TOKEN
+          # to .npmrc, which masks OIDC failures as a confusing 404.
 
       - name: Ensure npm supports trusted publishing
         run: |
@@ -54,4 +55,4 @@ jobs:
       # npm exchanges the GitHub OIDC token for a short-lived publish token and
       # adds provenance automatically. Do not pass --provenance or NODE_AUTH_TOKEN.
       - name: Publish to npm
-        run: npm publish --workspace @wytamma/maple-wasm --access public
+        run: npm publish --workspace @wytamma/maple-wasm --access public --loglevel=verbose
