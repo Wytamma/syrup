@@ -50,6 +50,52 @@ The WebAssembly artifacts are built via `pixi` and the helper scripts in [script
 npm run build:wasm
 ```
 
+The build writes `public/cmaple-threaded.js` and `public/cmaple-threaded.wasm`.
+The `@wytamma/maple-wasm` package copies those artifacts into its `dist` during
+its own build.
+
+### npm package
+
+The WASM runtime and its typed wrapper live in
+[`packages/maple-wasm`](packages/maple-wasm) and are published to npm as
+`@wytamma/maple-wasm`. The app consumes the package through an npm workspace,
+so build the package before type-checking, running the dev server, or building
+the app (`npm run build:lib`, which those scripts already do).
+
+```bash
+npm run build:lib   # compile the package and copy the WASM artifacts
+npm run test:lib    # package unit tests
+npm run smoke:lib   # Playwright smoke test against the built package
+```
+
+Publishing to npm is tokenless. `.github/workflows/publish-wasm-package.yml`
+uses npm trusted publishing: GitHub's OIDC identity is exchanged for a
+short-lived publish token, and npm generates provenance automatically. It runs
+on `maple-wasm-v*` tags or manual dispatch. No `NPM_TOKEN` secret is needed.
+
+One-time setup:
+
+1. On npmjs.com → `@wytamma/maple-wasm` → Settings → Trusted publishing, add:
+   - Provider: GitHub Actions
+   - Organization or user: `Wytamma`
+   - Repository: `syrup`
+   - Workflow filename: `publish-wasm-package.yml`
+   - Environment: leave empty
+   - Allowed actions: enable **Allow npm publish** (new configurations only
+     permit staged publishing by default)
+
+2. Push a `maple-wasm-v<version>` tag matching
+   `packages/maple-wasm/package.json`, or run the workflow manually. The
+   workflow refuses to publish when the tag and package version differ. The
+   first OIDC publish must succeed within 2 days of saving the trusted
+   publisher, or the configuration expires and must be recreated.
+
+After the first OIDC release, set the package's Publishing access to
+“Require two-factor authentication and disallow tokens”.
+
+The workflow uses Node 24 and installs npm >= 11.5.1, both required by trusted
+publishing.
+
 ### Available `pixi` tasks
 
 - `pixi run install-binaryen`

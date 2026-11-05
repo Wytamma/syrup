@@ -1,0 +1,57 @@
+name: Publish @wytamma/maple-wasm
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'maple-wasm-v*'
+
+permissions:
+  contents: read
+  # Required for npm trusted publishing (OIDC). No NPM_TOKEN is used.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Ensure npm supports trusted publishing
+        run: |
+          npm install --global npm@^11.5.1
+          npm --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify the WASM artifacts
+        run: node packages/maple-wasm/scripts/check-assets.mjs
+
+      - name: Build the package
+        run: npm run build:lib
+
+      - name: Check release tag matches package version
+        if: startsWith(github.ref, 'refs/tags/maple-wasm-v')
+        run: |
+          expected="${GITHUB_REF_NAME#maple-wasm-v}"
+          actual="$(node -p "require('./packages/maple-wasm/package.json').version")"
+          if [ "$expected" != "$actual" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $actual" >&2
+            exit 1
+          fi
+
+      - name: Test the package
+        run: npm run test --workspace @wytamma/maple-wasm
+
+      # npm exchanges the GitHub OIDC token for a short-lived publish token and
+      # adds provenance automatically. Do not pass --provenance or NODE_AUTH_TOKEN.
+      - name: Publish to npm
+        run: npm publish --workspace @wytamma/maple-wasm --access public

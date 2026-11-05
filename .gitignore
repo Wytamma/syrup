@@ -41,3 +41,6 @@ simulations/*.fasta
 simulations/*.log
 simulations/*.nwk
 benchmark/simulations/datasets
+# Generated package assets
+packages/maple-wasm/dist
+packages/maple-wasm/*.tgz

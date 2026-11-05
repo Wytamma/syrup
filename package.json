@@ -3,13 +3,19 @@
   "private": true,
   "version": "1.1.1",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "npm run build:lib && vite",
+    "build": "npm run build:lib && vite build",
     "preview": "vite preview",
+    "build:lib": "npm run build --workspace @wytamma/maple-wasm",
     "build:wasm": "pixi run build-wasm",
-    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
-    "test": "node --experimental-strip-types --test src/lib/phylocanvas/*.test.ts"
+    "check": "npm run build:lib && svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+    "test": "node --experimental-strip-types --test src/lib/phylocanvas/*.test.ts",
+    "test:lib": "npm run test --workspace @wytamma/maple-wasm",
+    "smoke:lib": "npm run smoke --workspace @wytamma/maple-wasm"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
@@ -24,6 +30,7 @@
   },
   "dependencies": {
     "@phylocanvas/phylocanvas.gl": "^1.62.0",
+    "@wytamma/maple-wasm": "^0.1.0",
     "deck.gl": "8.3.10",
     "three": "^0.184.0"
   }

@@ -1,163 +1,30 @@
+import {
+  MapleAlignment,
+  MapleError,
+  MapleRuntime,
+  sanitizeConstantSites,
+} from '@wytamma/maple-wasm'
 import type {
   AlignmentFormat,
   AlignmentStats,
   AlignmentWarningSummary,
-  CmapleWorkerRequest,
-  CmapleWorkerResponse,
   ConstantSiteCounts,
-  SubstitutionModel,
-  TreeSearchType,
-} from './types/cmaple'
-
-type EmscriptenModule = {
-  HEAPU8: Uint8Array
-  _cmaple_alloc: (size: number) => number
-  _cmaple_free: (ptr: number) => void
-  _cmaple_release: (handle: number) => void
-  _cmaple_analyze: (ptr: number, size: number, format: number) => number
-  _cmaple_infer: (
-    ptr: number,
-    size: number,
-    format: number,
-    numThreads: number,
-    substitutionModel: number,
-    branchSupportMethod: number,
-    branchSupportReplicates: number,
-    branchSupportEpsilon: number,
-    filterDivergentSamples: number,
-    maxDivergencePercent: number,
-    constantA: number,
-    constantC: number,
-    constantG: number,
-    constantT: number,
-    startingTreePtr: number,
-    startingTreeSize: number,
-    startingAlignmentPtr: number,
-    startingAlignmentSize: number,
-    branchLengthsFixed: number,
-    noReroot: number,
-    treeSearchType: number,
-    estimateMat: number,
-  ) => number
-  _cmaple_infer_loaded: (
-    handle: number,
-    numThreads: number,
-    substitutionModel: number,
-    branchSupportMethod: number,
-    branchSupportReplicates: number,
-    branchSupportEpsilon: number,
-    filterDivergentSamples: number,
-    maxDivergencePercent: number,
-    constantA: number,
-    constantC: number,
-    constantG: number,
-    constantT: number,
-    startingTreePtr: number,
-    startingTreeSize: number,
-    startingAlignmentPtr: number,
-    startingAlignmentSize: number,
-    branchLengthsFixed: number,
-    noReroot: number,
-    treeSearchType: number,
-    estimateMat: number,
-  ) => number
-  _cmaple_warning_summary: (
-    handle: number,
-    filterDivergentSamples: number,
-    maxDivergencePercent: number,
-    constantA: number,
-    constantC: number,
-    constantG: number,
-    constantT: number,
-  ) => number
-  _cmaple_export_maple: (handle: number) => number
-}
+  DivergenceSummary,
+} from '@wytamma/maple-wasm'
+import type { CmapleWorkerRequest, CmapleWorkerResponse } from './types/cmaple'
 
 type StoredAlignment = {
   fileName: string
   format: AlignmentFormat
   fileSize: number
-  wasmHandle?: number
+  alignment?: MapleAlignment
   stats?: AlignmentStats
   effective?: boolean
 }
 
-type PreflightWithHandle = CmapleWorkerResponse & {
-  handle?: number
-}
-
-type AlignmentCallResult = {
-  json: string
-  allocMs: number
-  copyMs: number
-  nativeMs: number
-  decodeMs: number
-}
-
-let runtimePromise: Promise<EmscriptenModule> | null = null
+let runtimePromise: Promise<MapleRuntime> | null = null
 let runtimeLoadMs: number | null = null
 const alignments = new Map<string, StoredAlignment>()
-
-const formatIds = {
-  auto: 0,
-  fasta: 1,
-  phylip: 2,
-  maple: 3,
-} as const
-
-const branchSupportMethodIds = {
-  none: 0,
-  sprta: 1,
-  'sh-alrt': 2,
-} as const
-
-const substitutionModelIds: Record<SubstitutionModel, number> = {
-  GTR: 0,
-  JC: 1,
-  UNREST: 2,
-  GTR20: 3,
-  NONREV: 4,
-  LG: 5,
-  WAG: 6,
-  JTT: 7,
-  'Q.PFAM': 8,
-  'Q.BIRD': 9,
-  'Q.MAMMAL': 10,
-  'Q.INSECT': 11,
-  'Q.PLANT': 12,
-  'Q.YEAST': 13,
-  JTTDCMUT: 14,
-  DCMUT: 15,
-  VT: 16,
-  PMB: 17,
-  BLOSUM62: 18,
-  DAYHOFF: 19,
-  MTREV: 20,
-  MTART: 21,
-  MTZOA: 22,
-  MTMET: 23,
-  MTVER: 24,
-  MTINV: 25,
-  MTMAM: 26,
-  FLAVI: 27,
-  HIVB: 28,
-  HIVW: 29,
-  FLU: 30,
-  RTREV: 31,
-  CPREV: 32,
-  'NQ.PFAM': 33,
-  'NQ.BIRD': 34,
-  'NQ.MAMMAL': 35,
-  'NQ.INSECT': 36,
-  'NQ.PLANT': 37,
-  'NQ.YEAST': 38,
-}
-
-const treeSearchTypeIds: Record<TreeSearchType, number> = {
-  fast: 0,
-  normal: 1,
-  exhaustive: 2,
-}
 
 function post(response: CmapleWorkerResponse) {
   if (response.type === 'log') {
@@ -175,27 +42,12 @@ function ms(value: number) {
   return value.toFixed(1)
 }
 
-function heapMiB(module: EmscriptenModule) {
-  return bytesToMiB(module.HEAPU8.byteLength)
-}
-
-function sanitizeConstantSites(counts: ConstantSiteCounts) {
-  return {
-    a: Math.max(0, Math.floor(Number(counts.a) || 0)),
-    c: Math.max(0, Math.floor(Number(counts.c) || 0)),
-    g: Math.max(0, Math.floor(Number(counts.g) || 0)),
-    t: Math.max(0, Math.floor(Number(counts.t) || 0)),
-  }
+function heapMiB(runtime: MapleRuntime) {
+  return bytesToMiB(runtime.heapSize)
 }
 
 function bench(id: string | undefined, message: string) {
   console.info(`[CMAPLE bench] ${id ? `id=${id} ` : ''}${message}`)
-}
-
-function readCStringFromBytes(bytes: Uint8Array, ptr: number) {
-  let end = ptr
-  while (bytes[end] !== 0) end += 1
-  return new TextDecoder().decode(Uint8Array.from(bytes.subarray(ptr, end)))
 }
 
 function getObservedWarningColumnCount(summary: AlignmentWarningSummary, _stats: AlignmentStats) {
@@ -230,77 +82,33 @@ function getLikelyLongRunWarning(summary: AlignmentWarningSummary, stats: Alignm
   return largeAlignmentWarning
 }
 
-async function loadCmaple() {
-  if (runtimePromise) return runtimePromise
-
-  runtimePromise = (async () => {
-    const startedAt = performance.now()
-    if (!self.crossOriginIsolated) {
-      throw new Error(
-        'Threaded WASM requires cross-origin isolation headers (Cross-Origin-Opener-Policy: same-origin and Cross-Origin-Embedder-Policy: require-corp).',
-      )
-    }
-
-    try {
-      const runtimeAssetVersion = Date.now().toString(36)
-      const scriptResponse = await fetch(`/cmaple-threaded.js?v=${runtimeAssetVersion}`, { cache: 'no-store' })
-      if (!scriptResponse.ok) {
-        throw new Error('CMAPLE threaded artifact is missing. Run `pixi run build-wasm` first.')
+function loadRuntime(): Promise<MapleRuntime> {
+  if (!runtimePromise) {
+    runtimePromise = (async () => {
+      const startedAt = performance.now()
+      if (!self.crossOriginIsolated) {
+        throw new MapleError(
+          'Threaded WASM requires cross-origin isolation headers (Cross-Origin-Opener-Policy: same-origin and Cross-Origin-Embedder-Policy: require-corp).',
+        )
       }
 
-      const scriptSource = await scriptResponse.text()
-      const scriptBlob = new Blob([scriptSource], { type: 'text/javascript' })
-      const scriptUrl = URL.createObjectURL(scriptBlob)
-      const module = await import(/* @vite-ignore */ scriptUrl)
-      const createCmapleModule = module.default as (options: Record<string, unknown>) => Promise<EmscriptenModule>
-
-      const moduleInstance = await createCmapleModule({
-        locateFile: (path: string) => `/${path}?v=${runtimeAssetVersion}`,
-        mainScriptUrlOrBlob: scriptBlob,
-        print: (message: string) => {
-          post({ type: 'log', message, stream: 'stdout' })
-        },
-        printErr: (message: string) => {
-          post({ type: 'log', message, stream: 'stderr' })
-        },
-      })
-
-      runtimeLoadMs = performance.now() - startedAt
-      return moduleInstance
-    } catch (err) {
-      throw new Error(err instanceof Error ? err.message : 'CMAPLE Emscripten runtime could not be loaded.')
-    }
-  })()
+      try {
+        const runtime = await MapleRuntime.load({
+          onStdout: (message) => post({ type: 'log', message, stream: 'stdout' }),
+          onStderr: (message) => post({ type: 'log', message, stream: 'stderr' }),
+        })
+        runtimeLoadMs = performance.now() - startedAt
+        return runtime
+      } catch (err) {
+        throw new Error(err instanceof Error ? err.message : 'CMAPLE Emscripten runtime could not be loaded.')
+      }
+    })()
+    void runtimePromise.catch(() => {
+      runtimePromise = null
+    })
+  }
 
   return runtimePromise
-}
-
-function callWithAlignment(
-  module: EmscriptenModule,
-  data: Uint8Array,
-  callback: (ptr: number) => number,
-) : AlignmentCallResult {
-  const allocStartedAt = performance.now()
-  const ptr = module._cmaple_alloc(data.byteLength)
-  if (!ptr) throw new Error('Could not allocate WASM memory for the alignment.')
-  const allocMs = performance.now() - allocStartedAt
-
-  const copyStartedAt = performance.now()
-  module.HEAPU8.set(data, ptr)
-  const copyMs = performance.now() - copyStartedAt
-
-  const nativeStartedAt = performance.now()
-  const resultPtr = callback(ptr)
-  const nativeMs = performance.now() - nativeStartedAt
-  module._cmaple_free(ptr)
-
-  if (!resultPtr) throw new Error('CMAPLE did not return a result.')
-
-  const decodeStartedAt = performance.now()
-  const json = readCStringFromBytes(module.HEAPU8, resultPtr)
-  const decodeMs = performance.now() - decodeStartedAt
-  module._cmaple_free(resultPtr)
-  return { json, allocMs, copyMs, nativeMs, decodeMs }
 }
 
 self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
@@ -311,17 +119,15 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
     if (message.type === 'clear') {
       const stored = alignments.get(message.id)
       alignments.delete(message.id)
-      if (stored?.wasmHandle && runtimePromise) {
-        const module = await loadCmaple()
-        module._cmaple_release(stored.wasmHandle)
-      }
+      stored?.alignment?.dispose()
       return
     }
 
-    const module = await loadCmaple()
+    const runtime = await loadRuntime()
     const runtimeReadyMs = performance.now() - requestStartedAt
 
     if (message.type === 'load') {
+      alignments.get(message.id)?.alignment?.dispose()
       const stored: StoredAlignment = {
         fileName: message.fileName,
         format: message.format,
@@ -340,120 +146,93 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
           `crossOriginIsolated=${crossOriginIsolated}`,
           `runtimeLoadMs=${runtimeLoadMs === null ? 'cached' : ms(runtimeLoadMs)}`,
           `runtimeReadyMs=${ms(runtimeReadyMs)}`,
-          `heapMiB=${heapMiB(module)}`,
+          `heapMiB=${heapMiB(runtime)}`,
         ].join(' '),
       )
+
       const analyzeStartedAt = performance.now()
-      const analyzeCall = callWithAlignment(module, message.data, (ptr) =>
-        module._cmaple_analyze(ptr, message.data.byteLength, formatIds[message.format]),
-      )
+      const alignment = runtime.parse(message.data, {
+        format: message.format,
+        fileName: message.fileName,
+      })
       const analyzeMs = performance.now() - analyzeStartedAt
-      const preflight = JSON.parse(analyzeCall.json) as PreflightWithHandle
-      if (preflight.type === 'preflight') {
-        if (!preflight.handle) {
-          throw new Error('CMAPLE did not return a parsed alignment handle.')
-        }
-        preflight.id = message.id
-        preflight.stats.fileName = message.fileName
-        preflight.stats.fileSize = message.data.byteLength
-        const longRunWarning = getLikelyLongRunWarning(preflight.warningSummary, preflight.stats)
-        if (longRunWarning) preflight.warnings = [...preflight.warnings, longRunWarning]
-        stored.wasmHandle = preflight.handle
-        stored.stats = preflight.stats
-        stored.effective = preflight.effective
-        delete preflight.handle
-        bench(
-          message.id,
-          [
-            'preflight.done',
-            `analyzeMs=${ms(analyzeMs)}`,
-            `wasmAllocMs=${ms(analyzeCall.allocMs)}`,
-            `wasmCopyMs=${ms(analyzeCall.copyMs)}`,
-            `nativeMs=${ms(analyzeCall.nativeMs)}`,
-            `decodeMs=${ms(analyzeCall.decodeMs)}`,
-            `totalMs=${ms(performance.now() - requestStartedAt)}`,
-            `heapMiB=${heapMiB(module)}`,
-            `detectedFormat=${preflight.stats.format}`,
-            `sequenceCount=${preflight.stats.sequenceCount}`,
-            `sequenceLength=${preflight.stats.sequenceLength}`,
-            `effective=${preflight.effective}`,
-          ].join(' '),
-        )
-      }
-      post(preflight)
+
+      stored.alignment = alignment
+      stored.stats = alignment.stats
+      stored.effective = alignment.effective
+
+      const warnings = [...alignment.warnings]
+      const longRunWarning = getLikelyLongRunWarning(alignment.warningSummary, alignment.stats)
+      if (longRunWarning) warnings.push(longRunWarning)
+
+      bench(
+        message.id,
+        [
+          'preflight.done',
+          `analyzeMs=${ms(analyzeMs)}`,
+          `nativeMs=${ms(analyzeMs)}`,
+          `totalMs=${ms(performance.now() - requestStartedAt)}`,
+          `heapMiB=${heapMiB(runtime)}`,
+          `detectedFormat=${alignment.stats.format}`,
+          `sequenceCount=${alignment.stats.sequenceCount}`,
+          `sequenceLength=${alignment.stats.sequenceLength}`,
+          `effective=${alignment.effective}`,
+        ].join(' '),
+      )
+
+      post({
+        type: 'preflight',
+        id: message.id,
+        stats: alignment.stats,
+        effective: alignment.effective,
+        warnings,
+        divergence: alignment.divergence,
+        warningSummary: alignment.warningSummary,
+      })
       return
     }
 
     const stored = alignments.get(message.id)
     if (!stored) throw new Error('No alignment is loaded. Drop the file again.')
-    if (!stored.wasmHandle) throw new Error('The parsed alignment is unavailable. Drop the file again.')
+    if (!stored.alignment) throw new Error('The parsed alignment is unavailable. Drop the file again.')
 
     if (message.type === 'summarize-filter') {
       const constantSites = sanitizeConstantSites(message.constantSites)
       const summaryStartedAt = performance.now()
-      const resultPtr = module._cmaple_warning_summary(
-        stored.wasmHandle,
-        message.filterDivergentSamples ? 1 : 0,
-        message.maxDivergencePercent,
-        constantSites.a,
-        constantSites.c,
-        constantSites.g,
-        constantSites.t,
-      )
-      if (!resultPtr) throw new Error('CMAPLE did not return a warning summary.')
-      const decodeStartedAt = performance.now()
-      const json = readCStringFromBytes(module.HEAPU8, resultPtr)
-      const decodeMs = performance.now() - decodeStartedAt
-      module._cmaple_free(resultPtr)
-      const result = JSON.parse(json) as CmapleWorkerResponse
-      if (result.type === 'error') {
-        post({ ...result, id: message.id })
-        return
-      }
-      if (result.type !== 'warning-summary') {
-        throw new Error('CMAPLE returned an unexpected warning summary.')
-      }
-      result.id = message.id
+      const warningSummary = stored.alignment.summarize({
+        filterDivergentSamples: message.filterDivergentSamples,
+        maxDivergencePercent: message.maxDivergencePercent,
+        constantSites,
+      })
       bench(
         message.id,
         [
           'summary.done',
           `summaryMs=${ms(performance.now() - summaryStartedAt)}`,
-          `decodeMs=${ms(decodeMs)}`,
           `filter=${message.filterDivergentSamples}`,
           `maxDivergencePercent=${message.maxDivergencePercent}`,
           `constantSites=${Object.values(constantSites).join(',')}`,
-          `sequenceCount=${result.warningSummary.sequenceCount}`,
-          `removedCount=${result.warningSummary.removedCount}`,
+          `sequenceCount=${warningSummary.sequenceCount}`,
+          `removedCount=${warningSummary.removedCount}`,
         ].join(' '),
       )
-      post(result)
+      post({ type: 'warning-summary', id: message.id, warningSummary })
       return
     }
 
     if (message.type === 'export-maple') {
       const exportStartedAt = performance.now()
-      const resultPtr = module._cmaple_export_maple(stored.wasmHandle)
-      if (!resultPtr) throw new Error('CMAPLE did not return a MAPLE export.')
-      const decodeStartedAt = performance.now()
-      const json = readCStringFromBytes(module.HEAPU8, resultPtr)
-      const decodeMs = performance.now() - decodeStartedAt
-      module._cmaple_free(resultPtr)
-      const result = JSON.parse(json) as CmapleWorkerResponse
-      if (result.type !== 'log') result.id = message.id
-      if (result.type === 'maple-export') {
-        bench(
-          message.id,
-          [
-            'maple-export.done',
-            `exportMs=${ms(performance.now() - exportStartedAt)}`,
-            `decodeMs=${ms(decodeMs)}`,
-            `mapleChars=${result.maple.length}`,
-            `heapMiB=${heapMiB(module)}`,
-          ].join(' '),
-        )
-      }
-      post(result)
+      const maple = stored.alignment.exportMaple()
+      bench(
+        message.id,
+        [
+          'maple-export.done',
+          `exportMs=${ms(performance.now() - exportStartedAt)}`,
+          `mapleChars=${maple.length}`,
+          `heapMiB=${heapMiB(runtime)}`,
+        ].join(' '),
+      )
+      post({ type: 'maple-export', id: message.id, maple })
       return
     }
 
@@ -466,7 +245,7 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         `fileSizeMiB=${bytesToMiB(stored.fileSize)}`,
         `selectedFormat=${stored.format}`,
         'parsedAlignment=reused',
-        `wasmHandle=${stored.wasmHandle}`,
+        `wasmHandle=${stored.alignment.handle}`,
         `detectedFormat=${stored.stats?.format ?? 'unknown'}`,
         `sequenceCount=${stored.stats?.sequenceCount ?? 'unknown'}`,
         `sequenceLength=${stored.stats?.sequenceLength ?? 'unknown'}`,
@@ -488,79 +267,42 @@ self.onmessage = async (event: MessageEvent<CmapleWorkerRequest>) => {
         `cpus=${navigator.hardwareConcurrency || 'unknown'}`,
         `crossOriginIsolated=${crossOriginIsolated}`,
         `runtimeReadyMs=${ms(runtimeReadyMs)}`,
-        `heapMiB=${heapMiB(module)}`,
+        `heapMiB=${heapMiB(runtime)}`,
       ].join(' '),
     )
-    const startingTreeBytes = message.startingTreeText ? new TextEncoder().encode(message.startingTreeText) : null
-    let startingTreePtr = 0
-    if (startingTreeBytes?.byteLength) {
-      startingTreePtr = module._cmaple_alloc(startingTreeBytes.byteLength)
-      if (!startingTreePtr) throw new Error('Could not allocate WASM memory for the starting tree.')
-      module.HEAPU8.set(startingTreeBytes, startingTreePtr)
-    }
-    const startingAlignmentBytes = message.startingAlignmentText
-      ? new TextEncoder().encode(message.startingAlignmentText)
-      : null
-    let startingAlignmentPtr = 0
-    if (startingAlignmentBytes?.byteLength) {
-      startingAlignmentPtr = module._cmaple_alloc(startingAlignmentBytes.byteLength)
-      if (!startingAlignmentPtr) throw new Error('Could not allocate WASM memory for the starting alignment.')
-      module.HEAPU8.set(startingAlignmentBytes, startingAlignmentPtr)
-    }
 
     const inferStartedAt = performance.now()
-    let resultPtr = 0
-    try {
-      resultPtr = module._cmaple_infer_loaded(
-        stored.wasmHandle,
-        message.numThreads,
-        substitutionModelIds[message.substitutionModel],
-        branchSupportMethodIds[message.branchSupportMethod],
-        message.branchSupportReplicates,
-        message.branchSupportEpsilon,
-        message.filterDivergentSamples ? 1 : 0,
-        message.maxDivergencePercent,
-        constantSites.a,
-        constantSites.c,
-        constantSites.g,
-        constantSites.t,
-        startingTreePtr,
-        startingTreeBytes?.byteLength ?? 0,
-        startingAlignmentPtr,
-        startingAlignmentBytes?.byteLength ?? 0,
-        message.branchLengthsFixed ? 1 : 0,
-        message.noReroot ? 1 : 0,
-        treeSearchTypeIds[message.treeSearchType],
-        message.estimateMat ? 1 : 0,
-      )
-    } finally {
-      if (startingTreePtr) module._cmaple_free(startingTreePtr)
-      if (startingAlignmentPtr) module._cmaple_free(startingAlignmentPtr)
-    }
-    if (!resultPtr) throw new Error('CMAPLE did not return a result.')
-    const decodeStartedAt = performance.now()
-    const json = readCStringFromBytes(module.HEAPU8, resultPtr)
-    const decodeMs = performance.now() - decodeStartedAt
-    module._cmaple_free(resultPtr)
-    const inferMs = performance.now() - inferStartedAt
-    const result = JSON.parse(json) as CmapleWorkerResponse
-    if (result.type !== 'log') result.id = message.id
-    if (result.type === 'result') {
-      bench(
-        message.id,
-        [
-          'infer.done',
-          `inferMs=${ms(inferMs)}`,
-          `decodeMs=${ms(decodeMs)}`,
-          `totalMs=${ms(performance.now() - requestStartedAt)}`,
-          `heapMiB=${heapMiB(module)}`,
-          `logLikelihood=${result.logLikelihood}`,
-          `newickChars=${result.newick.length}`,
-          `nexusChars=${result.nexus?.length ?? 0}`,
-        ].join(' '),
-      )
-    }
-    post(result)
+    const result = stored.alignment.infer({
+      numThreads: message.numThreads,
+      substitutionModel: message.substitutionModel,
+      branchSupportMethod: message.branchSupportMethod,
+      branchSupportReplicates: message.branchSupportReplicates,
+      branchSupportEpsilon: message.branchSupportEpsilon,
+      filterDivergentSamples: message.filterDivergentSamples,
+      maxDivergencePercent: message.maxDivergencePercent,
+      constantSites,
+      startingTree: message.startingTreeText,
+      startingAlignment: message.startingAlignmentText,
+      branchLengthsFixed: message.branchLengthsFixed,
+      noReroot: message.noReroot,
+      treeSearchType: message.treeSearchType,
+      estimateMat: message.estimateMat,
+    })
+
+    bench(
+      message.id,
+      [
+        'infer.done',
+        `inferMs=${ms(performance.now() - inferStartedAt)}`,
+        `totalMs=${ms(performance.now() - requestStartedAt)}`,
+        `heapMiB=${heapMiB(runtime)}`,
+        `logLikelihood=${result.logLikelihood}`,
+        `newickChars=${result.newick.length}`,
+        `nexusChars=${result.nexus?.length ?? 0}`,
+      ].join(' '),
+    )
+
+    post({ type: 'result', id: message.id, ...result })
   } catch (err) {
     post({
       type: 'error',

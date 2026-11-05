@@ -12,6 +12,11 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(version),
   },
   plugins: [svelte()],
+  optimizeDeps: {
+    // The package resolves its .wasm and Emscripten runtime relative to
+    // import.meta.url, so it must be served unbundled in development.
+    exclude: ['@wytamma/maple-wasm'],
+  },
   server: {
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',

@@ -1,82 +1,26 @@
-export type AlignmentFormat = 'auto' | 'fasta' | 'phylip' | 'maple'
-export type BranchSupportMethod = 'none' | 'sprta' | 'sh-alrt'
-export type SequenceType = 'dna' | 'protein'
-export type SubstitutionModel =
-  | 'GTR'
-  | 'JC'
-  | 'UNREST'
-  | 'GTR20'
-  | 'NONREV'
-  | 'LG'
-  | 'WAG'
-  | 'JTT'
-  | 'Q.PFAM'
-  | 'Q.BIRD'
-  | 'Q.MAMMAL'
-  | 'Q.INSECT'
-  | 'Q.PLANT'
-  | 'Q.YEAST'
-  | 'JTTDCMUT'
-  | 'DCMUT'
-  | 'VT'
-  | 'PMB'
-  | 'BLOSUM62'
-  | 'DAYHOFF'
-  | 'MTREV'
-  | 'MTART'
-  | 'MTZOA'
-  | 'MTMET'
-  | 'MTVER'
-  | 'MTINV'
-  | 'MTMAM'
-  | 'FLAVI'
-  | 'HIVB'
-  | 'HIVW'
-  | 'FLU'
-  | 'RTREV'
-  | 'CPREV'
-  | 'NQ.PFAM'
-  | 'NQ.BIRD'
-  | 'NQ.MAMMAL'
-  | 'NQ.INSECT'
-  | 'NQ.PLANT'
-  | 'NQ.YEAST'
-export type TreeSearchType = 'fast' | 'normal' | 'exhaustive'
+import type {
+  AlignmentFormat,
+  AlignmentStats,
+  AlignmentWarningSummary,
+  BranchSupportMethod,
+  ConstantSiteCounts,
+  DivergenceSummary,
+  SequenceType,
+  SubstitutionModel,
+  TreeSearchType,
+} from '@wytamma/maple-wasm'
 
-export type AlignmentStats = {
-  fileName: string
-  fileSize: number
-  format: AlignmentFormat
-  sequenceType: SequenceType
-  sampleNames: string[]
-  sequenceCount: number
-  sequenceLength: number
-}
-
-export type DivergenceSummary = {
-  sampleScores: number[]
-  cmapleMutationCounts: number[]
-  maxScore: number
-}
-
-export type AlignmentWarningSummary = {
-  filterDivergentSamples: boolean
-  maxDivergencePercent: number
-  constantSites: ConstantSiteCounts
-  sequenceCount: number
-  removedCount: number
-  sequenceLength: number
-  variableColumns: number
-  meanAmbiguousSites: number
-  ambiguousFraction: number
-}
-
-export type ConstantSiteCounts = {
-  a: number
-  c: number
-  g: number
-  t: number
-}
+export type {
+  AlignmentFormat,
+  AlignmentStats,
+  AlignmentWarningSummary,
+  BranchSupportMethod,
+  ConstantSiteCounts,
+  DivergenceSummary,
+  SequenceType,
+  SubstitutionModel,
+  TreeSearchType,
+} from '@wytamma/maple-wasm'
 
 export type CmapleWorkerRequest =
   | {

@@ -11,4 +11,6 @@ npm run build:wasm
 ```
 
 The build writes `public/cmaple-threaded.js` and
-`public/cmaple-threaded.wasm`, which are loaded by `src/cmaple.worker.ts`.
+`public/cmaple-threaded.wasm`. Those artifacts are copied into the
+`@wytamma/maple-wasm` package by `packages/maple-wasm/scripts/copy-assets.mjs`
+and are consumed by `src/cmaple.worker.ts` through that package.
