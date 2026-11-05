@@ -658,6 +658,12 @@ h1 {
   justify-content: stretch;
 }
 
+.options .estimate-mat-option {
+  font-weight: 200;
+  align-content: end;
+  text-align: end;
+}
+
 .options .checkbox-number-group .checkbox-option {
   width: 100%;
 }
