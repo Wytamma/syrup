@@ -1,0 +1,46 @@
+{
+  "name": "@wytamma/maple-wasm",
+  "version": "0.1.1",
+  "description": "Threaded CMAPLE maximum-likelihood phylogenetic inference in WebAssembly",
+  "type": "module",
+  "license": "GPL-2.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Wytamma/syrup.git",
+    "directory": "packages/maple-wasm"
+  },
+  "keywords": [
+    "cmaple",
+    "maple",
+    "phylogenetics",
+    "maximum-likelihood",
+    "webassembly",
+    "wasm"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "smoke": "npm run build && node scripts/smoke.mjs",
+    "prepublishOnly": "node scripts/check-assets.mjs && npm run build"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0",
+    "typescript": "~6.0.2"
+  }
+}
