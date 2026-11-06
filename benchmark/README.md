@@ -103,8 +103,8 @@ delta is `wasm - cli`.
 
 `config.json` holds dataset paths, thread counts, and the scale sweep:
 
-- `scale.sample_counts`: `[1455, 2909, 5818, 11636]` (0.25x, 0.5x, 1x, 2x the
-  reference sample count) at the reference sequence length of 29,903.
+- `scale.sample_counts`: `[50, 500, 5000, 50000]` — decade steps at the
+  reference sequence length of 29,903.
 - `scale.rates`: `[1e-6, 3e-6, 1e-5, 3e-5]` mutations per site per
   generation, which spans roughly 0.04%-1.2% maximum divergence with
   `n_eff = 100`. The reference dataset averages about 0.18% divergence.
