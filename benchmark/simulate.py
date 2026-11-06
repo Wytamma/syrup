@@ -52,36 +52,68 @@ def _write_maple(ts, reference: str, path: Path) -> None:
 
     A record is a nucleotide and a 1-based position, tab separated, matching
     the MAPLE files used by CMAPLE. The simulated data has substitutions only.
+
+    Records are accumulated as sparse arrays and sorted by sample index so
+    large sample counts (hundreds of thousands) stay tractable.
     """
-    variants = list(ts.variants())
+    import numpy as np
+
     # msprime picks an ancestral allele per site independently of the random
     # reference genome, so the MAPLE reference must carry those ancestral bases.
-    reference_chars = list(reference)
-    for variant in variants:
-        reference_chars[int(variant.site.position)] = variant.alleles[0]
+    reference_chars = np.frombuffer(reference.encode(), dtype=np.uint8).copy()
+    for variant in ts.variants():
+        reference_chars[int(variant.site.position)] = ord(variant.alleles[0])
 
-    rows: list[list[str]] = [[] for _ in range(ts.num_samples)]
-    for variant in variants:
+    sample_parts: list[np.ndarray] = []
+    position_parts: list[np.ndarray] = []
+    base_parts: list[np.ndarray] = []
+    for variant in ts.variants():
         alleles = variant.alleles
         ancestral = alleles[0]
-        position = int(variant.site.position) + 1
-        for index, genotype in enumerate(variant.genotypes):
-            if genotype == 0:
-                continue
-            base = alleles[genotype]
-            if base == ancestral:
-                # Back mutation to the ancestral allele: no net difference.
-                continue
-            rows[index].append(f"{base.lower()}\t{position}")
+        carriers = np.flatnonzero(variant.genotypes)
+        if carriers.size == 0:
+            continue
+        allele_bytes = np.frombuffer("".join(alleles).encode(), dtype=np.uint8)
+        bases = np.take(allele_bytes, variant.genotypes[carriers])
+        keep = bases != ord(ancestral)
+        if not keep.any():
+            continue
+        carriers = carriers[keep]
+        sample_parts.append(carriers.astype(np.int32))
+        position_parts.append(
+            np.full(carriers.size, int(variant.site.position) + 1, dtype=np.int32)
+        )
+        base_parts.append(bases[keep])
 
-    with open(path, "w") as fh:
-        fh.write(">reference\n")
-        fh.write("".join(reference_chars).lower() + "\n")
-        for index, mutations in enumerate(rows):
-            fh.write(f">sample_{index}\n")
-            if mutations:
-                fh.write("\n".join(mutations) + "\n")
+    if sample_parts:
+        sample_index = np.concatenate(sample_parts)
+        positions = np.concatenate(position_parts)
+        bases = np.concatenate(base_parts)
+        order = np.argsort(sample_index, kind="stable")
+        sample_index = sample_index[order]
+        positions = positions[order]
+        bases = bases[order]
+        bounds = np.searchsorted(sample_index, np.arange(ts.num_samples + 1))
+    else:
+        positions = bases = None
+        bounds = np.zeros(ts.num_samples + 1, dtype=np.int64)
 
+    with open(path, "wb") as fh:
+        fh.write(b">reference\n")
+        fh.write(bytes(reference_chars).lower() + b"\n")
+        for index in range(ts.num_samples):
+            fh.write(f">sample_{index}\n".encode())
+            start, end = int(bounds[index]), int(bounds[index + 1])
+            if end > start:
+                fh.write(
+                    b"\n".join(
+                        b"%c\t%d" % (base, position)
+                        for base, position in zip(
+                            bases[start:end].tolist(), positions[start:end].tolist()
+                        )
+                    )
+                    + b"\n"
+                )
 
 def simulate_low_diversity_tree(
     n_samples=10_000,
