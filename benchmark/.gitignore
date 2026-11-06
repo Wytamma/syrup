@@ -1,5 +1,7 @@
-.snakemake/
+.pixi/
 build/
-logs/
-metrics/
+node_modules/
 results/
+work/
+*.log
+*.tgz

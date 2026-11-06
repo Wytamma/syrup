@@ -1,0 +1,45 @@
+{
+  "cmaple": "build/cmaple",
+  "datasets_dir": "syrup-datasets",
+  "results_dir": "results",
+  "work_dir": "work",
+  "threads": 8,
+  "equivalence": {
+    "repeats": 1,
+    "branch_support": "none"
+  },
+  "scale": {
+    "sample_counts": [
+      1455,
+      2909,
+      5818,
+      11636
+    ],
+    "sequence_length": 29903,
+    "rates": [
+      1e-06,
+      3e-06,
+      1e-05,
+      3e-05
+    ],
+    "n_eff": 100,
+    "seed": 42,
+    "threads": 8,
+    "replicates": 3
+  },
+  "threads_benchmark": {
+    "dataset": "syrup-datasets/alignment_filtered2_masked3_subExample.maple",
+    "threads": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "repeats": 3,
+    "branch_support": "none"
+  }
+}

@@ -1,0 +1,22 @@
+[workspace]
+authors = ["Wytamma Wirth <wytamma.wirth@me.com>"]
+channels = ["conda-forge", "bioconda"]
+name = "syrup-benchmark"
+platforms = ["osx-arm64", "linux-64"]
+version = "0.1.0"
+
+[tasks]
+install = "npm install --no-audit --no-fund"
+equivalence = "python run.py equivalence"
+scale = "python run.py scale"
+threads = "python run.py threads"
+all = "python run.py all"
+
+[dependencies]
+python = ">=3.11,<3.14"
+msprime = ">=1.4.2,<2"
+tskit = ">=1.0.3,<2"
+dendropy = ">=4.6,<6"
+nodejs = ">=22,<26"
+cmake = ">=4.3.2,<5"
+make = ">=4.4.1,<5"

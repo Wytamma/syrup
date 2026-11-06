@@ -1,0 +1,10 @@
+{
+  "name": "@wytamma/syrup-benchmark",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone benchmark for the published @wytamma/maple-wasm package",
+  "dependencies": {
+    "@wytamma/maple-wasm": "0.1.1"
+  }
+}
