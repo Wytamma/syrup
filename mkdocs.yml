@@ -36,6 +36,7 @@ nav:
       - Pathogen phylogenetics with Nextclade: workflows/pathogen-nextclade.md
       - Molecular clock with Clockor2: workflows/clockor2.md
       - Amino acid phylogenetics with MUSCLE: workflows/amino-acid-muscle.md
+  - Maple WASM: maple-wasm.md
   - Citation: citation.md
   - App: https://syrup.cpg.org.au/
 

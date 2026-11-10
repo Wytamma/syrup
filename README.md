@@ -4,6 +4,7 @@ SYRUP is a browser-based application for privacy-preserving, installation-free p
 
 - App: [https://syrup.cpg.org.au](https://syrup.cpg.org.au/)
 - Documentation: [docs](https://syrup.cpg.org.au/docs/)
+- Maple WASM library: [npm](https://www.npmjs.com/package/@wytamma/maple-wasm) · [docs](https://syrup.cpg.org.au/docs/maple-wasm/)
 - CMAPLE manual: [IQ-TREE CMAPLE user manual](https://github.com/iqtree/cmaple/wiki/User-Manual)
 
 ## Features

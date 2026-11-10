@@ -1,5 +1,7 @@
 # @wytamma/maple-wasm
 
+[![maple-wasm on npm](https://img.shields.io/npm/v/@wytamma/maple-wasm?label=maple-wasm)](https://www.npmjs.com/package/@wytamma/maple-wasm)
+
 [CMAPLE](https://github.com/iqtree/cmaple) maximum-likelihood phylogenetic
 inference compiled to threaded WebAssembly, with a typed TypeScript API.
 
@@ -74,10 +76,14 @@ This parses and infers in one native call and does not retain the alignment.
 
 ```ts
 // maple.worker.ts
-import { MapleRuntime, type InferenceOptions } from '@wytamma/maple-wasm'
+import {
+  MapleRuntime,
+  type InferenceOptions,
+  type MapleAlignment,
+} from '@wytamma/maple-wasm'
 
 const runtime = await MapleRuntime.load()
-let alignment: Awaited<ReturnType<typeof runtime.parse>> | undefined
+let alignment: MapleAlignment | undefined
 
 self.onmessage = (event) => {
   if (event.data.type === 'parse') {

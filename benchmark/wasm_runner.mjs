@@ -133,6 +133,7 @@ function harnessHtml(config) {
 
   ;(async () => {
     await mark('start')
+
     const started = performance.now()
     const { MapleRuntime } = await import('/dist/index.js')
     await mark('imported')
@@ -312,12 +313,12 @@ async function main() {
       '--headless=new',
       '--no-sandbox',
       '--disable-gpu',
+      '--disable-dev-shm-usage',
       '--no-first-run',
       '--no-default-browser-check',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
       '--disable-backgrounding-occluded-windows',
-      '--disable-dev-shm-usage',
       `--user-data-dir=${profileDir}`,
       `http://127.0.0.1:${port}/`,
     ],

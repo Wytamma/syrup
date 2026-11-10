@@ -93,11 +93,11 @@ All results are TSV, written under `results/`:
 | File | Contents |
 | --- | --- |
 | `equivalence/equivalence.tsv` | Per-dataset, per-replicate comparison: both log likelihoods, delta, RF and normalized RF. |
-| `equivalence/equivalence-summary.tsv` | Per-dataset means and maxima. |
+| `equivalence/equivalence-summary.tsv` | Per-dataset means and maxima, including mean inference time for each engine. |
 | `scale/scale.tsv` | One row per (sample count, mutation rate, seed): simulated divergence, variable sites, parse/inference/wall seconds, log likelihood. |
 | `scale/scale-summary.tsv` | Per (sample count, mutation rate): mean divergence and variable sites, median inference time across seeds. |
 | `threads/threads.tsv` | One row per (tool, thread count, replicate): wall seconds, inference milliseconds, log likelihood. |
-| `threads/threads-summary.tsv` | Median wall time, speedup vs one thread, and parallel efficiency. |
+| `threads/threads-summary.tsv` | Median inference time, speedup vs one thread, and parallel efficiency. |
 
 Logs, tree files, and the raw metrics JSON for each run live alongside the
 TSVs.
@@ -105,6 +105,20 @@ TSVs.
 Normalized RF is the symmetric difference of unrooted bipartitions divided by
 `2 * (n - 3)`; zero-length internal edges are collapsed first. Log-likelihood
 delta is `wasm - cli`.
+
+Summaries compare inference time only. For the CLI, `infer_seconds` is the
+`Runtime:` value CMAPLE reports in its log (it excludes process startup); for
+WASM it is `infer_ms`, measured around `alignment.infer` and excluding Chrome
+launch, runtime load, and parse. Raw `wall_seconds` remains in the detail TSVs
+for audit. Run-to-run variance on a laptop is routinely 10-20%, so summaries
+use the median of three replicates rather than a single run.
+
+Thread scaling saturates once the requested threads occupy every core: the
+browser, compositor, and OS still need CPU. On an 8-core (6 performance +
+2 efficiency) machine, 7-8 threads are at or past saturation, so the curve
+flattens and single-run noise can make 8 look slower than 7. Record
+`hardwareConcurrency` and use `--thread-list` to extend the sweep on a
+larger machine.
 
 ## Configuration
 
