@@ -15,6 +15,7 @@ SYRUP is a browser-based application for privacy-preserving, installation-free p
 - Supports configurable threaded CMAPLE inference when the browser provides cross-origin isolation.
 - Supports branch support settings, starting trees, sample filtering, constant-site counts, and MAPLE export.
 - Renders inferred trees interactively and supports Newick copy/download.
+- Opens inferred trees and their MAPLE alignments in MicrobeTrace through an approved browser-only handoff.
 - Keeps alignment and tree files local to the user's browser.
 
 ## Technology
@@ -86,5 +87,14 @@ Threaded WASM requires cross-origin isolation headers:
 
 - `Cross-Origin-Opener-Policy: same-origin`
 - `Cross-Origin-Embedder-Policy: require-corp`
+
+The `/microbetrace-export.html` bridge page (and its adjacent JavaScript file) must be served without those two headers. The bridge reads a short-lived export from same-origin IndexedDB and opens MicrobeTrace after a second user confirmation; the main Syrup page remains cross-origin isolated for threaded WebAssembly. Local Vite development and preview configure this route exception automatically. Production hosting must apply the same path-specific exception.
+
+With MicrobeTrace running on `http://localhost:4200` and Syrup running on
+`http://localhost:5173`, verify the complete browser handoff with:
+
+```bash
+npm run test:microbetrace-integration
+```
 
 Local development and `vite preview` provide these headers. If you deploy to another host, that host must also send them for threaded execution to work.

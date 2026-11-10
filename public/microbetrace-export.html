@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark light">
+  <title>Continue to MicrobeTrace</title>
+  <style>
+    :root { color-scheme: dark; font: 16px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; background: #101010; color: #f2f2f2; }
+    main { box-sizing: border-box; width: min(680px, 100%); margin: 0 auto; padding: 64px 24px; }
+    .panel { padding: 24px; border: 1px solid rgb(255 255 255 / 0.16); border-radius: 16px; background: #1a1a1a; }
+    h1 { margin: 0 0 12px; font-size: clamp(1.8rem, 5vw, 2.5rem); }
+    p { color: #cfcfcf; }
+    button { min-height: 44px; padding: 10px 18px; border: 1px solid #ff981f; border-radius: 999px; background: #ff981f; color: #17110a; cursor: pointer; font: inherit; font-weight: 750; }
+    button:hover:not(:disabled) { background: #ffad4d; }
+    button:disabled { cursor: wait; opacity: 0.58; }
+    .technical { color: #9d9d9d; font-size: 0.85rem; }
+    #status.error { color: #ff9a9a; }
+    @media (prefers-color-scheme: light) {
+      :root { color-scheme: light; }
+      body { background: #f4f2ef; color: #1d1c1a; }
+      .panel { border-color: rgb(24 24 24 / 0.14); background: #fff; }
+      p { color: #504d48; }
+      .technical { color: #716b63; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Continue to MicrobeTrace</h1>
+    <p>Syrup prepared your tree and MAPLE alignment. Nothing has left this browser.</p>
+    <section class="panel">
+      <p id="summary">Reading the staged analysis…</p>
+      <button id="continue" type="button" disabled>Open in MicrobeTrace</button>
+      <p id="status" role="status" aria-live="polite"></p>
+    </section>
+    <p class="technical">This non-isolated bridge keeps Syrup's threaded WebAssembly page isolated while enabling the approved MicrobeTrace handoff.</p>
+  </main>
+  <script src="./microbetrace-export.js"></script>
+</body>
+</html>
