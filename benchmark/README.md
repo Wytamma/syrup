@@ -29,13 +29,16 @@ Requirements: `pixi`, `npm`, and Chrome or Chromium. On macOS/Linux the
 runner finds the standard application paths; otherwise set `CHROME_BIN`.
 
 ```sh
+# Clone the submodule (cmaple)
+git submodule update --init --recursive 
+
 cd benchmark
 
 # Python environment (msprime, tskit, dendropy, node)
 pixi install --manifest-path pixi.toml
 
 # Published package under test
-npm install
+pixi run npm install
 
 # CMAPLE CLI (built from ../vendor/cmaple)
 pixi run bash build_cmaple_cli.sh
@@ -48,10 +51,14 @@ output path (`CMAPLE_SOURCE` selects another source tree). Pass
 ## Running
 
 ```sh
-pixi run --manifest-path pixi.toml equivalence
-pixi run --manifest-path pixi.toml scale
-pixi run --manifest-path pixi.toml threads
-pixi run --manifest-path pixi.toml all
+pixi run equivalence
+pixi run scale
+pixi run threads
+pixi run all
+```
+
+```sh
+CHROME_BIN=/home/wwirth/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome pixi run all
 ```
 
 Or call the script directly:
