@@ -26,6 +26,13 @@ We provide several example workflows in the [Browser based workflows](workflows/
 
 For very large production runs, native CMAPLE is usually faster and exposes more command-line options. For the full command-line option reference, see the [CMAPLE User Manual](https://github.com/iqtree/cmaple/wiki/User-Manual).
 
+## Maple WASM library
+
+The WebAssembly runtime behind Syrup is published as
+[`@wytamma/maple-wasm`](https://www.npmjs.com/package/@wytamma/maple-wasm)
+with a typed TypeScript API. See [Maple WASM](maple-wasm.md) to run CMAPLE
+from another browser application or Web Worker.
+
 ## Privacy
 
 Syrup runs in your browser. Alignment and tree files are read locally and are not uploaded by the app.
