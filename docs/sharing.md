@@ -2,19 +2,6 @@
 
 Syrup can open an alignment, starting tree, and starting alignment directly from URL parameters. This is useful when you want to share a reproducible browser link with collaborators.
 
-## Host files publicly
-
-The files must be available at public URLs that the browser can fetch. A normal GitHub repository page is not enough; use the raw file URL.
-
-For GitHub, put the files in a public repository and use raw URLs like:
-
-```text
-https://raw.githubusercontent.com/USER/REPO/main/path/alignment.maple
-https://raw.githubusercontent.com/USER/REPO/main/path/tree.nwk
-```
-
-Private repositories, local files, and URLs that block browser cross-origin requests will not work as shared Syrup links.
-
 ## Tree library
 
 Every completed inference is kept in your browser, and the tree library is where saved runs are shared from. Open it with **TREES** in the top bar, or the library icon in the tree toolbar. The page lives at `/trees.html`.
@@ -29,6 +16,19 @@ The library lists the newest 50 runs, each with its Newick tree, NEXUS export an
 - **Send** takes any other tabEE-enabled destination URL.
 
 The Clockor2 and Trakka buttons use tabEE: Syrup hands the tree to the receiving app through the browser, nothing is uploaded, and the receiver asks you to approve the incoming dataset before it is imported. The receiving app must be on a build that supports tabEE. If a handoff fails, download the Newick tree and open it in the app manually.
+
+## Host files publicly
+
+The files must be available at public URLs that the browser can fetch. A normal GitHub repository page is not enough; use the raw file URL.
+
+For GitHub, put the files in a public repository and use raw URLs like:
+
+```text
+https://raw.githubusercontent.com/USER/REPO/main/path/alignment.maple
+https://raw.githubusercontent.com/USER/REPO/main/path/tree.nwk
+```
+
+Private repositories, local files, and URLs that block browser cross-origin requests will not work as shared Syrup links.
 
 ## URL builder
 
