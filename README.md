@@ -92,6 +92,25 @@ Local development and `vite preview` provide these headers. If you deploy to ano
 
 The tree library at `/trees.html` is the exception: it must be served **without** `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy`. That page holds a live handle on the tabEE receiving window (the Clockor2 and Trakka sends) and loads the MicrobeTrace SDK, neither of which survives an opener handle. `public/_headers` encodes this for Cloudflare Pages and Workers static assets: isolation on `/*`, detached for `/trees.html`. Hosts that cannot send per-path headers (GitHub Pages, for example) cannot host these features.
 
+Deployed Syrup builds send MicrobeTrace handoffs to the CDC development
+instance at `https://cdcgov.github.io/MicrobeTrace/` by default. The Syrup team
+can test that deployment from a local checkout without running MicrobeTrace by
+setting:
+
+```text
+VITE_MICROBETRACE_TARGET=https://cdcgov.github.io/MicrobeTrace/
+```
+
+Local Syrup otherwise uses `http://localhost:4200/`. When the integration is
+ready for production, build Syrup with:
+
+```text
+VITE_MICROBETRACE_TARGET=https://microbetrace.cdc.gov/MicrobeTrace/
+```
+
+Only the documented local, development, and production MicrobeTrace targets are
+accepted.
+
 With MicrobeTrace running on `http://localhost:4200` and Syrup running on
 `http://localhost:5173`, verify the complete browser handoff with:
 

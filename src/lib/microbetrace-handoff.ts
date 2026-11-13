@@ -36,18 +36,49 @@ export type MicrobeTraceExport = {
   newick: string
 }
 
+type MicrobeTraceEnvironment = {
+  VITE_MICROBETRACE_TARGET?: string
+}
+
 const SDK_PATH = 'assets/embed/microbetrace-embed.js'
+const LOCAL_TARGET = 'http://localhost:4200/'
+const DEVELOPMENT_TARGET = 'https://cdcgov.github.io/MicrobeTrace/'
+const PRODUCTION_TARGET = 'https://microbetrace.cdc.gov/MicrobeTrace/'
+const DEPLOYED_TARGETS = new Set([DEVELOPMENT_TARGET, PRODUCTION_TARGET])
 
 let sdkPromise: Promise<MicrobeTraceEmbedApi> | null = null
 
 export function getMicrobeTraceConfig(
   location: Pick<Location, 'hostname'> = window.location,
+  environment: MicrobeTraceEnvironment = import.meta.env ?? {},
 ) {
   const isLocal =
     location.hostname === 'localhost' || location.hostname === '127.0.0.1'
-  return isLocal
-    ? { partnerId: 'local-dev', target: 'http://localhost:4200/' }
-    : { partnerId: 'syrup', target: 'https://microbetrace.cdc.gov/MicrobeTrace/' }
+  const configuredTarget = environment.VITE_MICROBETRACE_TARGET?.trim()
+  const target = normalizeTarget(configuredTarget || (isLocal ? LOCAL_TARGET : DEVELOPMENT_TARGET))
+  const approvedTargets = isLocal
+    ? new Set([LOCAL_TARGET, ...DEPLOYED_TARGETS])
+    : DEPLOYED_TARGETS
+
+  if (!approvedTargets.has(target)) {
+    throw new Error('VITE_MICROBETRACE_TARGET must use an approved MicrobeTrace deployment URL.')
+  }
+
+  return {
+    partnerId: isLocal ? 'local-dev' : 'syrup',
+    target,
+  }
+}
+
+function normalizeTarget(value: string) {
+  const target = new URL(value)
+  if (target.username || target.password) {
+    throw new Error('VITE_MICROBETRACE_TARGET may not contain credentials.')
+  }
+  target.search = ''
+  target.hash = ''
+  if (!target.pathname.endsWith('/')) target.pathname += '/'
+  return target.toString()
 }
 
 export function buildMicrobeTraceOptions(
