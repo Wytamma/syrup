@@ -27,7 +27,7 @@
   const FEEDBACK_MS = 1400;
 
   const ISO_NOTICE =
-    "This page is cross-origin isolated, so it cannot hold a receiving window. Serve /trees.html without COOP/COEP.";
+    "This page is cross-origin isolated, so it cannot hold a receiving window or load the MicrobeTrace SDK. Serve /trees.html without COOP/COEP.";
 
   const theme = createThemeController();
   const isolated: boolean = self.crossOriginIsolated;
@@ -161,6 +161,11 @@
   }
 
   async function sendTreeToMicrobeTrace(tree: StoredTree) {
+    if (isolated) {
+      setStatus(ISO_NOTICE, "error");
+      return;
+    }
+
     if (!tree.maple) {
       setStatus(
         "This tree was saved without its MAPLE alignment. Re-run the inference to send it to MicrobeTrace.",
@@ -332,7 +337,7 @@
           onclick={() => void sendTree(CLOCKOR2_URL)}
         >
           <img class="trees-logo" src="/images/clockor2_logo.svg" alt="" />
-          Send to Clockor2
+          Open in Clockor2
         </button>
         <button
           type="button"
@@ -350,12 +355,12 @@
             src="/images/trakka_logo_small_dark.svg"
             alt=""
           />
-          Send to Trakka
+          Open in Trakka
         </button>
         <button
           type="button"
           class="button-like trees-button"
-          disabled={!selectedTree || pendingTree !== undefined}
+          disabled={!selectedTree || isolated || pendingTree !== undefined}
           onclick={submitMicrobeTrace}
         >
           <svg
@@ -373,7 +378,7 @@
             <circle cx="17.5" cy="18" r="2.25" />
             <path d="m8 11 7.4-3.8M8 13l7.4 3.8" />
           </svg>
-          Send to MicrobeTrace
+          Open in MicrobeTrace
         </button>
       </div>
 
