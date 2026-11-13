@@ -15,6 +15,21 @@ https://raw.githubusercontent.com/USER/REPO/main/path/tree.nwk
 
 Private repositories, local files, and URLs that block browser cross-origin requests will not work as shared Syrup links.
 
+## Tree library
+
+Every completed inference is kept in your browser, and the tree library is where saved runs are shared from. Open it with **TREES** in the top bar, or the library icon in the tree toolbar. The page lives at `/trees.html`.
+
+![The Syrup tree library: saved runs with copy, download, rerun and remove actions, plus the send destinations](assets/screenshots/tree-library.png)
+
+The library lists the newest 50 runs, each with its Newick tree, NEXUS export and MAPLE alignment, and never leaves the device. Select a run, then use the row actions to copy the Newick, download the tree, rerun it in Syrup, or remove it. The buttons under the list send the selected tree somewhere else:
+
+- **Open in Clockor2** hands the tree to [Clockor2](https://clockor2.github.io/) so it can be dated without a download.
+- **Open in Trakka** does the same for [Trakka](https://scout.trakka.org/).
+- **Open in MicrobeTrace** sends the tree *and* its MAPLE alignment through the MicrobeTrace embed SDK.
+- **Send** takes any other tabEE-enabled destination URL.
+
+The Clockor2 and Trakka buttons use tabEE: Syrup hands the tree to the receiving app through the browser, nothing is uploaded, and the receiver asks you to approve the incoming dataset before it is imported. The receiving app must be on a build that supports tabEE. If a handoff fails, download the Newick tree and open it in the app manually.
+
 ## URL builder
 
 Paste public file URLs below to build a Syrup link.

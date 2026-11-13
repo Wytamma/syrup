@@ -10,7 +10,20 @@
 
 For this example, the date is the final field in the tip label. Split each tip label on `/` and use position `-1`, which gives `2020`, `2021`, and so on.
 
-## Load the tree in Clockor2
+## Send the tree from Syrup
+
+Syrup can hand the tree straight to Clockor2, so there is no file to download.
+
+1. Run the inference, or reopen a saved run from the tree library.
+2. Open the tree library with **TREES** in the top bar, or the library icon in the tree toolbar.
+3. Select the run and choose **Open in Clockor2**.
+4. Clockor2 opens in a new tab with the tree already offered. Approve the incoming dataset and it is imported.
+
+The transfer uses tabEE: the tree moves between the two browser tabs and is never uploaded to a server, and Clockor2 asks for approval before importing. Clockor2 must be running a build with tabEE support. If the button is disabled or the handshake fails, download the Newick tree and use the manual steps below — the tree library row has a download action, and the viewer toolbar still has one too.
+
+## Load the tree in Clockor2 manually
+
+Use these steps instead of the handoff, or to re-add a tree you downloaded earlier.
 
 1. Open [Clockor2](https://clockor2.github.io/).
 2. Add the Newick tree downloaded from Syrup.
