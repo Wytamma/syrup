@@ -1021,6 +1021,23 @@ input[type="range"] {
   transform: scale(1.08);
 }
 
+.microbetrace-button {
+  color: var(--accent);
+}
+
+.loading-icon {
+  animation: button-spin 850ms linear infinite;
+}
+
+.tree-handoff-error {
+  color: var(--danger) !important;
+  font-weight: 650;
+}
+
+@keyframes button-spin {
+  to { transform: rotate(360deg); }
+}
+
 .tree-reset-button {
   flex: 0 0 64px;
   width: 64px;
@@ -1190,3 +1207,323 @@ input[type="range"] {
     height: auto;
   }
 }
+
+/* Four topbar items must still fit on a 320px phone. */
+@media (max-width: 420px) {
+  .app-topbar {
+    gap: 8px;
+    padding: 8px 6px 0;
+  }
+
+  .app-topbar-actions {
+    gap: 6px;
+  }
+
+  .brandmark,
+  .docs-link,
+  .theme-toggle {
+    font-size: 0.76rem;
+  }
+}
+
+body.trees-document {
+  height: 100%;
+  overflow: hidden;
+}
+
+main.trees-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  /* `main` centers its grid items for the landing page; block children here
+     must span the page, or the header shrinks to its content width. */
+  place-items: initial;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.trees-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trees-brand img {
+  height: 76px;
+  width: auto;
+}
+
+.trees-shell {
+  width: min(620px, 100%);
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 18px 18px 14px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 14px;
+}
+
+.trees-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+
+.trees-panel--list {
+  min-height: 0;
+  max-height: 100%;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.tree-list {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  margin: 0;
+  padding: 8px;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.tree-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 6px 6px 10px;
+  border-radius: 10px;
+}
+
+.tree-row-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.tree-row-actions {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.tree-row-actions button {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.tree-row-actions svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.tree-row:hover {
+  background: var(--surface-muted);
+}
+
+.tree-row-body {
+  display: grid;
+  gap: 2px;
+}
+
+.tree-row-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.tree-row-meta {
+  color: var(--subtle);
+  font-size: 0.8rem;
+}
+
+.trees-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.trees-actions button,
+.trees-actions .button-like {
+  width: 100%;
+  min-height: 44px;
+}
+
+.trees-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.trees-action-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.trees-logo {
+  height: 22px;
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.trees-logo-dark {
+  display: none;
+}
+
+:root[data-theme='dark'] .trees-logo-light {
+  display: none;
+}
+
+:root[data-theme='dark'] .trees-logo-dark {
+  display: inline-block;
+}
+
+.trees-custom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.trees-custom input {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.trees-status,
+.trees-empty,
+.trees-hint,
+.trees-warning,
+.trees-footer {
+  overflow-wrap: anywhere;
+}
+
+.trees-status {
+  font-size: 14px;
+}
+
+.trees-status[data-kind='error'] {
+  color: var(--danger);
+}
+
+.trees-hint,
+.trees-footer {
+  color: var(--subtle);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.trees-empty {
+  color: var(--subtle);
+}
+
+.trees-warning {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 55%, transparent);
+  border-radius: 12px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 0.85rem;
+}
+
+.tree-actions .button-like {
+  text-decoration: none;
+}
+
+@media (max-height: 640px) {
+  .trees-shell {
+    gap: 10px;
+    padding: 10px 14px 12px;
+  }
+
+  .trees-panel {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .trees-actions {
+    gap: 6px;
+  }
+
+  .trees-brand img {
+    height: 28px;
+  }
+
+  .trees-footer {
+    font-size: 0.72rem;
+  }
+}
+
+@media (max-height: 520px) and (min-width: 600px) {
+  .trees-shell {
+    grid-template-columns: minmax(0, 1fr) minmax(230px, 300px);
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 12px;
+    row-gap: 10px;
+  }
+
+  .trees-brand {
+    grid-column: 1 / -1;
+  }
+
+  .trees-panel--list {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .trees-panel--actions {
+    grid-column: 2;
+    grid-row: 2;
+    align-content: start;
+    overflow-y: auto;
+  }
+
+  .trees-panel--actions button {
+    gap: 6px;
+    padding: 0 10px;
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+}
+
+@media (max-height: 520px) {
+  .trees-panel {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .trees-actions button,
+  .trees-actions .button-like,
+  .trees-custom input {
+    min-height: 38px;
+  }
+
+  .trees-hint,
+  .trees-status:empty,
+  .trees-footer {
+    display: none;
+    text-align: center;
+  }
+}
+

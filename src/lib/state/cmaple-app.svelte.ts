@@ -23,6 +23,9 @@ import type {
   SubstitutionModel,
   TreeSearchType,
 } from '../../types/cmaple'
+import { downloadTextFile } from '../download'
+import { treeBaseName, treeDownloadName } from '../tree-export'
+import { saveTree } from '../tree-store'
 
 export type AppState = 'idle' | 'preflight' | 'ready' | 'running' | 'done' | 'error'
 
@@ -74,6 +77,10 @@ export function createCmapleApp() {
   let timerId: number | null = null
   let copyFeedbackTimer: number | null = null
   let downloadFeedbackTimer: number | null = null
+  let pendingMapleExport: {
+    resolve: (maple: string) => void
+    reject: (error: Error) => void
+  } | null = null
   let logFlushId: number | null = null
   let pendingLogLines: string[] = []
   let divergenceData: DivergenceSummary | null = null
@@ -166,6 +173,7 @@ export function createCmapleApp() {
   })
 
   function destroy() {
+    rejectPendingMapleExport(new Error('Syrup closed before the MAPLE export completed.'))
     clearFeedbackTimer('copy')
     clearFeedbackTimer('download')
     flushLogLines()
@@ -407,6 +415,7 @@ export function createCmapleApp() {
   }
 
   function clearCurrent() {
+    rejectPendingMapleExport(new Error('The alignment changed before the MAPLE export completed.'))
     if (app.currentId) {
       worker?.postMessage({ type: 'clear', id: app.currentId })
     }
@@ -476,6 +485,7 @@ export function createCmapleApp() {
   }
 
   async function loadFile(file: File) {
+    rejectPendingMapleExport(new Error('The alignment changed before the MAPLE export completed.'))
     if (app.currentId) worker?.postMessage({ type: 'clear', id: app.currentId })
 
     app.currentId = crypto.randomUUID()
@@ -568,26 +578,43 @@ export function createCmapleApp() {
 
   function downloadNewick() {
     if (!app.newick) return
-    const content = app.nexus || app.newick
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    const baseName = app.fileName.replace(/\.[^.]+$/, '') || 'cmaple-tree'
-    link.href = url
-    link.download = app.nexus ? `${baseName}.mat.nex` : `${baseName}.nwk`
-    link.click()
-    URL.revokeObjectURL(url)
+    const hasNexus = app.nexus !== ''
+    downloadTextFile(hasNexus ? app.nexus : app.newick, treeDownloadName(app.fileName, hasNexus))
     showActionFeedback('download')
   }
 
-  function downloadMaple() {
+  async function downloadMaple() {
     if (!app.currentId || app.state === 'preflight' || app.state === 'running') return
     app.isExportingMaple = true
     app.error = ''
-    getWorker().postMessage({
-      type: 'export-maple',
-      id: app.currentId,
+    try {
+      const maple = await requestMapleExport()
+      const baseName = app.fileName.replace(/\.[^.]+$/, '') || 'alignment'
+      downloadTextFile(maple, `${baseName}.maple`)
+    } catch (err) {
+      app.error = err instanceof Error ? err.message : 'Could not export the MAPLE alignment.'
+    } finally {
+      app.isExportingMaple = false
+    }
+  }
+
+  function requestMapleExport() {
+    if (!app.currentId) return Promise.reject(new Error('Load an alignment before exporting MAPLE.'))
+    if (pendingMapleExport) return Promise.reject(new Error('A MAPLE export is already in progress.'))
+
+    return new Promise<string>((resolve, reject) => {
+      pendingMapleExport = { resolve, reject }
+      getWorker().postMessage({
+        type: 'export-maple',
+        id: app.currentId,
+      })
     })
+  }
+
+  function rejectPendingMapleExport(error: Error) {
+    if (!pendingMapleExport) return
+    pendingMapleExport.reject(error)
+    pendingMapleExport = null
   }
 
   function toggleInternalLabels() {
@@ -735,6 +762,10 @@ export function createCmapleApp() {
       }
 
       if (message.type === 'error') {
+        if (pendingMapleExport) {
+          rejectPendingMapleExport(new Error(message.error))
+          return
+        }
         app.error = message.error
         app.isExportingMaple = false
         app.warningSummaryPending = false
@@ -774,15 +805,8 @@ export function createCmapleApp() {
       }
 
       if (message.type === 'maple-export') {
-        const blob = new Blob([message.maple], { type: 'text/plain;charset=utf-8' })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        const baseName = app.fileName.replace(/\.[^.]+$/, '') || 'alignment'
-        link.href = url
-        link.download = `${baseName}.maple`
-        link.click()
-        URL.revokeObjectURL(url)
-        app.isExportingMaple = false
+        pendingMapleExport?.resolve(message.maple)
+        pendingMapleExport = null
         return
       }
 
@@ -796,6 +820,20 @@ export function createCmapleApp() {
       app.effectiveStatus = message.effective
       app.warnings = message.warnings
       stopTimer()
+      void (async () => {
+        const maple = await requestMapleExport().catch(() => '')
+        await saveTree({
+          name: treeBaseName(app.fileName),
+          sourceFileName: app.fileName,
+          newick: message.newick,
+          nexus: message.nexus ?? '',
+          maple,
+          logLikelihood: message.logLikelihood,
+          sampleCount: app.stats?.sequenceCount ?? 0,
+          sequenceLength: app.stats?.sequenceLength ?? 0,
+          sequenceType: app.stats?.sequenceType ?? 'dna',
+        })
+      })()
       app.state = 'done'
     }
 

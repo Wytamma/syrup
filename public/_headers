@@ -1,0 +1,11 @@
+# Threaded WASM needs cross-origin isolation on every page.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+# The tree library must stay outside isolation: the tabEE send buttons need a
+# live handle on the receiving window, and the page loads the MicrobeTrace SDK.
+# Later rules detach headers added above.
+/trees.html
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy
