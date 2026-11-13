@@ -116,6 +116,11 @@ button:hover:not(:disabled),
   color: #17120b;
 }
 
+:root[data-theme="light"] .primary-button,
+:root[data-theme="light"] .primary-button:hover:not(:disabled) {
+  color: #fff;
+}
+
 button:disabled,
 select:disabled,
 input:disabled {
