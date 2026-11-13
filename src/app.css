@@ -1349,15 +1349,63 @@ main.trees-page {
   transition: transform 180ms ease, opacity 180ms ease;
 }
 
-/* Four row actions need their own line on phones. */
+.tree-menu {
+  display: none;
+  flex: 0 0 auto;
+}
+
+.tree-row-menu {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  gap: 2px;
+  min-width: 200px;
+  padding: 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+
+.tree-row-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+}
+
+.tree-row-menu button:hover:not(:disabled) {
+  background: var(--surface-muted);
+}
+
+.tree-row-menu svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+/* Phones get a kebab menu so a row stays on one line. */
 @media (max-width: 480px) {
-  .tree-row {
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: 6px;
+  .tree-menu {
+    display: block;
   }
 
   .tree-row-actions {
-    justify-content: flex-end;
+    display: none;
+  }
+
+  .tree-row-name,
+  .tree-row-meta {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 

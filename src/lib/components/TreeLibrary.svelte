@@ -109,11 +109,13 @@
     try {
       await navigator.clipboard.writeText(tree.newick);
       flashCopy(tree.id);
+      return true;
     } catch (error) {
       setErrorStatus(
         `Copy failed — ${error instanceof Error ? error.message : String(error)}`,
         "error",
       );
+      return false;
     }
   }
 
@@ -122,6 +124,7 @@
     const fileName = treeDownloadName(tree.sourceFileName, hasNexus);
     downloadTextFile(hasNexus ? tree.nexus : tree.newick, fileName);
     flashDownload(tree.id);
+    return fileName;
   }
 
   async function sendTree(targetUrl: string) {
@@ -154,6 +157,62 @@
     } finally {
       pendingTree = undefined;
     }
+  }
+
+  let openMenuId = $state("");
+  let menuPosition = $state({ top: 0, right: 0 });
+
+  const MENU_ESTIMATED_HEIGHT = 190;
+
+  function closeMenu() {
+    openMenuId = "";
+  }
+
+  function toggleMenu(event: MouseEvent, treeId: string) {
+    if (openMenuId === treeId) {
+      closeMenu();
+      return;
+    }
+
+    const trigger = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const below = trigger.bottom + 6;
+    const top =
+      below + MENU_ESTIMATED_HEIGHT > window.innerHeight
+        ? Math.max(8, trigger.top - MENU_ESTIMATED_HEIGHT)
+        : below;
+
+    menuPosition = { top, right: Math.round(window.innerWidth - trigger.right) };
+    openMenuId = treeId;
+  }
+
+  async function copyFromMenu(tree: StoredTree) {
+    closeMenu();
+    if (await copyTree(tree)) setErrorStatus(`Copied ${tree.name} Newick.`);
+  }
+
+  function downloadFromMenu(tree: StoredTree) {
+    closeMenu();
+    setErrorStatus(`Downloaded ${downloadTree(tree)}.`);
+  }
+
+  function rerunFromMenu(tree: StoredTree) {
+    closeMenu();
+    rerunTree(tree);
+  }
+
+  function removeFromMenu(tree: StoredTree) {
+    closeMenu();
+    void removeTree(tree);
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") closeMenu();
+  }
+
+  function handleDocumentPointerDown(event: PointerEvent) {
+    if (!openMenuId) return;
+    const target = event.target as HTMLElement | null;
+    if (!target?.closest(".tree-menu")) closeMenu();
   }
 
   function rerunTree(tree: StoredTree) {
@@ -227,12 +286,20 @@
 
   onMount(() => {
     theme.mount();
+    document.addEventListener("pointerdown", handleDocumentPointerDown);
+    document.addEventListener("keydown", handleKeydown);
+    document.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("resize", closeMenu);
     channel = new BroadcastChannel(TREES_CHANGED_CHANNEL);
     channel.onmessage = () => void refresh();
     void refresh();
   });
 
   onDestroy(() => {
+    document.removeEventListener("pointerdown", handleDocumentPointerDown);
+    document.removeEventListener("keydown", handleKeydown);
+    document.removeEventListener("scroll", closeMenu, true);
+    window.removeEventListener("resize", closeMenu);
     if (copyTimer !== null) clearTimeout(copyTimer);
     if (downloadTimer !== null) clearTimeout(downloadTimer);
     channel?.close();
@@ -268,8 +335,12 @@
                   bind:group={selectedId}
                 />
                 <span class="tree-row-body">
-                  <span class="tree-row-name">{tree.name}</span>
-                  <span class="tree-row-meta">{formatTreeMeta(tree)}</span>
+                  <span class="tree-row-name" title={tree.name}
+                    >{tree.name}</span
+                  >
+                  <span class="tree-row-meta" title={formatTreeMeta(tree)}
+                    >{formatTreeMeta(tree)}</span
+                  >
                 </span>
               </label>
               <div class="tree-row-actions">
@@ -394,6 +465,115 @@
                     />
                   </svg>
                 </button>
+              </div>
+              <div class="tree-menu">
+                <button
+                  type="button"
+                  class="icon-button tree-menu-button"
+                  aria-haspopup="menu"
+                  aria-expanded={openMenuId === tree.id}
+                  aria-label="Actions for {tree.name}"
+                  title="Actions"
+                  onclick={(event) => toggleMenu(event, tree.id)}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                    <circle cx="5" cy="12" r="1.9" />
+                    <circle cx="12" cy="12" r="1.9" />
+                    <circle cx="19" cy="12" r="1.9" />
+                  </svg>
+                </button>
+                {#if openMenuId === tree.id}
+                  <div
+                    class="tree-row-menu"
+                    role="menu"
+                    aria-label="Actions for {tree.name}"
+                    style="top: {menuPosition.top}px; right: {menuPosition.right}px"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onclick={() => void copyFromMenu(tree)}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M15.75 17.25v1.5a2.25 2.25 0 0 1-2.25 2.25h-7.5a2.25 2.25 0 0 1-2.25-2.25v-7.5A2.25 2.25 0 0 1 6 9h1.5"
+                        />
+                        <path
+                          d="M9.75 15h7.5A2.25 2.25 0 0 0 19.5 12.75v-7.5A2.25 2.25 0 0 0 17.25 3h-7.5A2.25 2.25 0 0 0 7.5 5.25v7.5A2.25 2.25 0 0 0 9.75 15Z"
+                        />
+                      </svg>
+                      Copy Newick
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onclick={() => downloadFromMenu(tree)}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 3v12" />
+                        <path d="m7.5 10.5 4.5 4.5 4.5-4.5" />
+                        <path d="M3.75 20.25h16.5" />
+                      </svg>
+                      Download tree
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onclick={() => rerunFromMenu(tree)}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+                        />
+                      </svg>
+                      Rerun in SYRUP
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onclick={() => removeFromMenu(tree)}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
+                        />
+                      </svg>
+                      Remove tree
+                    </button>
+                  </div>
+                {/if}
               </div>
             </div>
           {/each}
