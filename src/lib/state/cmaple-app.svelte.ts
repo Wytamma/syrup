@@ -25,11 +25,12 @@ import type {
 } from '../../types/cmaple'
 import { downloadTextFile } from '../download'
 import { treeBaseName, treeDownloadName } from '../tree-export'
-import { saveTree } from '../tree-store'
+import { getTree, saveTree } from '../tree-store'
 
 export type AppState = 'idle' | 'preflight' | 'ready' | 'running' | 'done' | 'error'
 
 const ALIGNMENT_QUERY_PARAM = 'alignment'
+const RERUN_QUERY_PARAM = 'rerun'
 const STARTING_TREE_QUERY_PARAMS = ['startingTree']
 const STARTING_ALIGNMENT_QUERY_PARAMS = ['startingAlignment']
 const DNA_MODELS: SubstitutionModel[] = ['GTR', 'JC', 'UNREST']
@@ -198,6 +199,12 @@ export function createCmapleApp() {
   async function loadAlignmentFromQueryParam() {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
+    const rerunId = params.get(RERUN_QUERY_PARAM)
+    if (rerunId) {
+      await loadStoredTree(rerunId)
+      return
+    }
+
     const alignmentUrl = params.get(ALIGNMENT_QUERY_PARAM)
     const startingTreeUrl = getFirstQueryParam(params, STARTING_TREE_QUERY_PARAMS)
     const startingAlignmentUrl = getFirstQueryParam(params, STARTING_ALIGNMENT_QUERY_PARAMS)
@@ -214,6 +221,28 @@ export function createCmapleApp() {
       await loadAlignmentFromUrl(alignmentUrl)
     } catch (err) {
       app.error = err instanceof Error ? err.message : 'Could not download files from the URL parameters.'
+      app.logs = []
+      app.state = 'error'
+    }
+  }
+
+  async function loadStoredTree(id: string) {
+    try {
+      const tree = await getTree(id)
+      if (!tree || !tree.maple) {
+        app.error = 'That saved tree has no MAPLE alignment. Run the inference again.'
+        app.logs = []
+        app.state = 'error'
+        return
+      }
+
+      const url = new URL(window.location.href)
+      url.searchParams.delete(RERUN_QUERY_PARAM)
+      window.history.replaceState({}, '', url)
+
+      await loadFile(new File([tree.maple], `${tree.name}.maple`, { type: 'text/plain' }))
+    } catch (err) {
+      app.error = err instanceof Error ? err.message : 'Could not load the saved alignment.'
       app.logs = []
       app.state = 'error'
     }

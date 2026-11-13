@@ -149,6 +149,35 @@ export async function saveTree(tree: TreeToSave): Promise<void> {
   }
 }
 
+export async function getTree(id: string): Promise<StoredTree | undefined> {
+  const database = await openDatabase()
+
+  return new Promise<StoredTree | undefined>((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readonly')
+    const request = transaction.objectStore(STORE_NAME).get(id)
+
+    request.onsuccess = () => resolve(request.result as StoredTree | undefined)
+    request.onerror = () => reject(request.error ?? new Error('The tree could not be read.'))
+    transaction.onabort = () => reject(transaction.error ?? new Error('The tree could not be read.'))
+  })
+}
+
+export async function deleteTree(id: string): Promise<void> {
+  const database = await openDatabase()
+
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readwrite')
+    transaction.objectStore(STORE_NAME).delete(id)
+
+    transaction.oncomplete = () => {
+      announceChange()
+      resolve()
+    }
+    transaction.onerror = () => reject(transaction.error ?? new Error('The tree could not be removed.'))
+    transaction.onabort = () => reject(transaction.error ?? new Error('The tree could not be removed.'))
+  })
+}
+
 export async function listTrees(): Promise<StoredTree[]> {
   const database = await openDatabase()
 

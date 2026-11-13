@@ -29,6 +29,12 @@ The interactive viewer displays inferred mutations on both internal and terminal
 
 The **Download MAPLE format** link exports the loaded alignment in MAPLE format. This is available after preflight completes and before inference starts.
 
+## Tree library
+
+Every completed inference is kept in this browser (newest 50) with its Newick tree, NEXUS export and MAPLE alignment. The library lists them newest first; each row can copy the Newick, download the tree, rerun it in SYRUP, or remove it from the browser.
+
+**Rerun** loads the stored MAPLE alignment back into SYRUP, so a saved run can be re-inferred without the original alignment file. **Remove** deletes the record, including its alignment, after a confirmation.
+
 ## Open in MicrobeTrace
 
 Every completed inference is saved with its MAPLE alignment. In the tree library, select a tree and choose **Open in MicrobeTrace** to hand the Newick tree and the MAPLE alignment to MicrobeTrace through its partner embed SDK. The files go straight from the browser to MicrobeTrace; nothing is uploaded anywhere else.

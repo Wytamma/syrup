@@ -1344,6 +1344,18 @@ main.trees-page {
   transition: transform 180ms ease, opacity 180ms ease;
 }
 
+/* Four row actions need their own line on phones. */
+@media (max-width: 480px) {
+  .tree-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
+  }
+
+  .tree-row-actions {
+    justify-content: flex-end;
+  }
+}
+
 .tree-row:hover {
   background: var(--surface-muted);
 }
