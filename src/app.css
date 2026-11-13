@@ -1381,12 +1381,6 @@ main.trees-page {
   gap: 10px;
 }
 
-.trees-action-icon {
-  width: 20px;
-  height: 20px;
-  flex: 0 0 auto;
-}
-
 .trees-logo {
   height: 22px;
   width: auto;
