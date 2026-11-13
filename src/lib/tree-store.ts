@@ -27,6 +27,11 @@ export interface StoredTree {
 
 export type TreeToSave = Omit<StoredTree, 'id' | 'savedAt' | 'sizeBytes'>
 
+/** Bytes actually stored for one tree: the Newick, its NEXUS export and the MAPLE alignment. */
+export function treeStorageBytes(tree: Pick<TreeToSave, 'newick' | 'nexus' | 'maple'>) {
+  return new Blob([tree.newick, tree.nexus ?? '', tree.maple ?? '']).size
+}
+
 let databasePromise: Promise<IDBDatabase> | null = null
 let changeChannel: BroadcastChannel | null = null
 
@@ -125,7 +130,7 @@ export async function saveTree(tree: TreeToSave): Promise<void> {
       ...tree,
       id: crypto.randomUUID(),
       savedAt: Date.now(),
-      sizeBytes: new Blob([tree.newick]).size,
+      sizeBytes: treeStorageBytes(tree),
     }
 
     for (let attempt = 0; attempt <= MAX_QUOTA_RETRIES; attempt += 1) {
