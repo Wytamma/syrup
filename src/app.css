@@ -1260,9 +1260,14 @@ main.trees-page {
   min-height: 0;
   margin: 0 auto;
   padding: 18px 18px 14px;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
+}
+
+/* Cards keep their content height; only the list shrinks when the screen is short. */
+.trees-brand {
+  flex: 0 0 auto;
 }
 
 .trees-panel {
@@ -1276,10 +1281,14 @@ main.trees-page {
 }
 
 .trees-panel--list {
+  flex: 0 1 auto;
   min-height: 0;
-  max-height: 100%;
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
+}
+
+.trees-panel--actions {
+  flex: 0 0 auto;
 }
 
 .tree-list {
@@ -1476,7 +1485,9 @@ main.trees-page {
 }
 
 @media (max-height: 520px) and (min-width: 600px) {
+  /* Short and wide: two columns, sized by grid so both panes stay inside the screen. */
   .trees-shell {
+    display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(230px, 300px);
     grid-template-rows: auto minmax(0, 1fr);
     column-gap: 12px;
@@ -1490,11 +1501,13 @@ main.trees-page {
   .trees-panel--list {
     grid-column: 1;
     grid-row: 2;
+    min-width: 0;
   }
 
   .trees-panel--actions {
     grid-column: 2;
     grid-row: 2;
+    min-height: 0;
     align-content: start;
     overflow-y: auto;
   }
