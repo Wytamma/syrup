@@ -16,6 +16,7 @@ export type MicrobeTraceOptions = {
   launch: {
     datasetName: string
     defaultView: '2D Network'
+    networkDistanceSource: 'sequences'
   }
 }
 
@@ -114,6 +115,7 @@ export function buildMicrobeTraceOptions(
     launch: {
       datasetName,
       defaultView: '2D Network',
+      networkDistanceSource: 'sequences',
     },
   }
 }

@@ -49,8 +49,30 @@ try {
     .locator('.lm_tab.lm_active')
     .filter({ hasText: '2D Network' })
     .waitFor({ timeout: 120_000 })
+  await microbeTracePage.waitForFunction(
+    () => window.commonService?.session?.network?.isFullyLoaded === true,
+    undefined,
+    { timeout: 120_000 },
+  )
+  const network = await microbeTracePage.evaluate(() => ({
+    distanceSource: window.commonService.session.meta.partnerEmbed?.networkDistanceSource,
+    links: window.commonService.session.data.links.map((link) => ({
+      origin: link.origin,
+      distanceOrigin: link.distanceOrigin,
+    })),
+  }))
+  assert.equal(network.distanceSource, 'sequences')
+  assert.ok(network.links.length > 0, 'The MAPLE alignment should produce network links.')
+  assert.ok(
+    network.links.every((link) => (
+      link.distanceOrigin === 'Genetic Distance'
+      && link.origin?.length === 1
+      && link.origin[0] === 'Genetic Distance'
+    )),
+    'The 2D network must use only MAPLE sequence distances, not Newick patristic distances.',
+  )
 
-  console.log('Syrup → MicrobeTrace handoff verified in a new tab with the MAPLE alignment, Newick tree, and 2D Network launch view.')
+  console.log('Syrup → MicrobeTrace handoff verified in a new tab with a MAPLE-only 2D network and retained Newick tree.')
 } finally {
   await browser.close()
 }

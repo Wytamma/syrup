@@ -16,6 +16,7 @@ test('opens Syrup handoffs in the 2D Network view', () => {
   })
 
   assert.equal(options.launch.defaultView, '2D Network')
+  assert.equal(options.launch.networkDistanceSource, 'sequences')
 })
 
 test('uses local MicrobeTrace for an unconfigured localhost build', () => {
