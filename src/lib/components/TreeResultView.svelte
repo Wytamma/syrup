@@ -113,8 +113,6 @@
       <a
         class="icon-button button-like"
         href="/trees.html"
-        target="_blank"
-        rel="noopener"
         aria-label="Open tree library"
         title="Tree library"
       >
