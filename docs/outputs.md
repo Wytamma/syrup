@@ -37,6 +37,6 @@ Every completed inference is kept in this browser (newest 50) with its Newick tr
 
 ## Open in MicrobeTrace
 
-Every completed inference is saved with its MAPLE alignment. In the tree library, select a tree and choose **Open in MicrobeTrace** to hand the Newick tree and the MAPLE alignment to MicrobeTrace through its partner embed SDK. The files go straight from the browser to MicrobeTrace; nothing is uploaded anywhere else.
+Every completed inference is saved with its MAPLE alignment. In the tree library, select a tree and choose **Open in MicrobeTrace** to hand the Newick tree and the MAPLE alignment to MicrobeTrace through its partner embed SDK. MicrobeTrace opens the imported dataset in its 2D Network view. The files go straight from the browser to MicrobeTrace; nothing is uploaded anywhere else.
 
 The tree library page is served without cross-origin isolation, which is what lets it load the MicrobeTrace SDK and open the partner handoff.

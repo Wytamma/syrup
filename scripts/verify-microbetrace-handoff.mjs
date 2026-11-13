@@ -33,8 +33,12 @@ try {
     (await microbeTracePage.locator('[data-testid="partner-dataset-name"]').textContent()) || '',
     /B\.1\.429 — Syrup analysis/,
   )
+  await microbeTracePage
+    .locator('.lm_tab.lm_active')
+    .filter({ hasText: '2D Network' })
+    .waitFor({ timeout: 120_000 })
 
-  console.log('Syrup → MicrobeTrace handoff verified from the tree library with the MAPLE alignment and Newick tree.')
+  console.log('Syrup → MicrobeTrace handoff verified with the MAPLE alignment, Newick tree, and 2D Network launch view.')
 } finally {
   await browser.close()
 }

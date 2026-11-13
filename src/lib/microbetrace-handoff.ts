@@ -15,7 +15,7 @@ export type MicrobeTraceOptions = {
   }
   launch: {
     datasetName: string
-    defaultView: 'Phylogenetic Tree'
+    defaultView: '2D Network'
   }
 }
 
@@ -83,8 +83,9 @@ function normalizeTarget(value: string) {
 
 export function buildMicrobeTraceOptions(
   input: MicrobeTraceExport,
+  config = getMicrobeTraceConfig(),
 ): MicrobeTraceOptions {
-  const { partnerId, target } = getMicrobeTraceConfig()
+  const { partnerId, target } = config
   // Saved tree names are already extension-free (".429" must not be stripped).
   const baseName = input.name || 'syrup-analysis'
   const datasetName = `${baseName} — Syrup analysis`
@@ -112,7 +113,7 @@ export function buildMicrobeTraceOptions(
     },
     launch: {
       datasetName,
-      defaultView: 'Phylogenetic Tree',
+      defaultView: '2D Network',
     },
   }
 }

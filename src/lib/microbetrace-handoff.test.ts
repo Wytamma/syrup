@@ -1,6 +1,22 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { getMicrobeTraceConfig } from './microbetrace-handoff.ts'
+import {
+  buildMicrobeTraceOptions,
+  getMicrobeTraceConfig,
+} from './microbetrace-handoff.ts'
+
+test('opens Syrup handoffs in the 2D Network view', () => {
+  const options = buildMicrobeTraceOptions({
+    name: 'example',
+    maple: '>reference\n>sample\nA\t1',
+    newick: '(reference:0,sample:1);',
+  }, {
+    partnerId: 'local-dev',
+    target: 'http://localhost:4200/',
+  })
+
+  assert.equal(options.launch.defaultView, '2D Network')
+})
 
 test('uses local MicrobeTrace for an unconfigured localhost build', () => {
   assert.deepEqual(
