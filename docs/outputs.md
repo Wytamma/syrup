@@ -11,6 +11,7 @@ The viewer controls can:
 - show or hide leaf labels
 - copy the Newick tree
 - download the tree
+- open the tree and MAPLE alignment in MicrobeTrace
 - return to run settings
 
 ## Newick tree
@@ -27,3 +28,9 @@ The interactive viewer displays inferred mutations on both internal and terminal
 ## MAPLE alignment
 
 The **Download MAPLE format** link exports the loaded alignment in MAPLE format. This is available after preflight completes and before inference starts.
+
+## Open in MicrobeTrace
+
+After inference, select **Open in MicrobeTrace** to send the inferred Newick tree and the retained MAPLE alignment to MicrobeTrace. Syrup stages the files briefly in same-origin browser storage and opens the tree library page without cross-origin isolation. Select **Open in MicrobeTrace** there to complete the handoff.
+
+The confirmation is required because Syrup uses cross-origin isolation for threaded WebAssembly, while MicrobeTrace's approved partner handoff uses a popup relationship. The staged export expires after five minutes and is deleted when the handoff begins. Files remain in the browser throughout this process.

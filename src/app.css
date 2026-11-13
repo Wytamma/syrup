@@ -1021,6 +1021,23 @@ input[type="range"] {
   transform: scale(1.08);
 }
 
+.microbetrace-button {
+  color: var(--accent);
+}
+
+.loading-icon {
+  animation: button-spin 850ms linear infinite;
+}
+
+.tree-handoff-error {
+  color: var(--danger) !important;
+  font-weight: 650;
+}
+
+@keyframes button-spin {
+  to { transform: rotate(360deg); }
+}
+
 .tree-reset-button {
   flex: 0 0 64px;
   width: 64px;
@@ -1409,6 +1426,20 @@ main.trees-page {
   color: var(--subtle);
   font-size: 0.8rem;
   text-align: center;
+}
+
+.trees-handoff {
+  align-self: start;
+  align-content: start;
+}
+
+.trees-handoff h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.trees-handoff button {
+  min-height: 44px;
 }
 
 .trees-empty {

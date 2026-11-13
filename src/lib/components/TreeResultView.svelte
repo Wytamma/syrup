@@ -27,6 +27,9 @@
     <div>
       <strong>{app.fileName}</strong>
       <span>{app.logLikelihood === null ? '' : `Log-likelihood ${Math.round(app.logLikelihood)}`}</span>
+      {#if app.microbeTraceError}
+        <span class="tree-handoff-error" role="alert">{app.microbeTraceError}</span>
+      {/if}
     </div>
     <div class="tree-actions">
       {#if hasMutationAnnotations}
@@ -44,6 +47,27 @@
           </svg>
         </button>
       {/if}
+      <button
+        type="button"
+        class="icon-button microbetrace-button"
+        aria-label="Open tree and alignment in MicrobeTrace"
+        title="Open in MicrobeTrace"
+        disabled={app.isOpeningMicrobeTrace}
+        onclick={app.openInMicrobeTrace}
+      >
+        {#if app.isOpeningMicrobeTrace}
+          <svg class="loading-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+          </svg>
+        {:else}
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="12" r="2.25" />
+            <circle cx="17.5" cy="6" r="2.25" />
+            <circle cx="17.5" cy="18" r="2.25" />
+            <path d="m8 11 7.4-3.8M8 13l7.4 3.8" />
+          </svg>
+        {/if}
+      </button>
       <button
         type="button"
         class="icon-button"

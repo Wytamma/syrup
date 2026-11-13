@@ -24,6 +24,10 @@ import type {
   TreeSearchType,
 } from '../../types/cmaple'
 import { downloadTextFile } from '../download'
+import {
+  openMicrobeTraceBridgeWindow,
+  stageMicrobeTraceExport,
+} from '../microbetrace-handoff'
 import { treeBaseName, treeDownloadName } from '../tree-export'
 import { saveTree } from '../tree-store'
 
@@ -77,6 +81,10 @@ export function createCmapleApp() {
   let timerId: number | null = null
   let copyFeedbackTimer: number | null = null
   let downloadFeedbackTimer: number | null = null
+  let pendingMapleExport: {
+    resolve: (maple: string) => void
+    reject: (error: Error) => void
+  } | null = null
   let logFlushId: number | null = null
   let pendingLogLines: string[] = []
   let divergenceData: DivergenceSummary | null = null
@@ -106,6 +114,8 @@ export function createCmapleApp() {
     didCopyNewick: false,
     didDownloadNewick: false,
     isExportingMaple: false,
+    isOpeningMicrobeTrace: false,
+    microbeTraceError: '',
     numThreads: Math.max(1, Math.floor((navigator.hardwareConcurrency || 1) / 2)),
     maxThreads: Math.max(1, navigator.hardwareConcurrency || 1),
     substitutionModel: 'GTR' as SubstitutionModel,
@@ -162,6 +172,7 @@ export function createCmapleApp() {
     copyNewick,
     downloadNewick,
     downloadMaple,
+    openInMicrobeTrace,
     toggleInternalLabels,
     toggleLeafLabels,
     toggleMutationLabels,
@@ -169,6 +180,7 @@ export function createCmapleApp() {
   })
 
   function destroy() {
+    rejectPendingMapleExport(new Error('Syrup closed before the MAPLE export completed.'))
     clearFeedbackTimer('copy')
     clearFeedbackTimer('download')
     flushLogLines()
@@ -410,6 +422,7 @@ export function createCmapleApp() {
   }
 
   function clearCurrent() {
+    rejectPendingMapleExport(new Error('The alignment changed before the MAPLE export completed.'))
     if (app.currentId) {
       worker?.postMessage({ type: 'clear', id: app.currentId })
     }
@@ -446,6 +459,8 @@ export function createCmapleApp() {
     app.didCopyNewick = false
     app.didDownloadNewick = false
     app.isExportingMaple = false
+    app.isOpeningMicrobeTrace = false
+    app.microbeTraceError = ''
     clearFeedbackTimer('copy')
     clearFeedbackTimer('download')
     pendingLogLines = []
@@ -479,6 +494,7 @@ export function createCmapleApp() {
   }
 
   async function loadFile(file: File) {
+    rejectPendingMapleExport(new Error('The alignment changed before the MAPLE export completed.'))
     if (app.currentId) worker?.postMessage({ type: 'clear', id: app.currentId })
 
     app.currentId = crypto.randomUUID()
@@ -576,14 +592,64 @@ export function createCmapleApp() {
     showActionFeedback('download')
   }
 
-  function downloadMaple() {
+  async function downloadMaple() {
     if (!app.currentId || app.state === 'preflight' || app.state === 'running') return
     app.isExportingMaple = true
     app.error = ''
-    getWorker().postMessage({
-      type: 'export-maple',
-      id: app.currentId,
+    try {
+      const maple = await requestMapleExport()
+      const baseName = app.fileName.replace(/\.[^.]+$/, '') || 'alignment'
+      downloadTextFile(maple, `${baseName}.maple`)
+    } catch (err) {
+      app.error = err instanceof Error ? err.message : 'Could not export the MAPLE alignment.'
+    } finally {
+      app.isExportingMaple = false
+    }
+  }
+
+  async function openInMicrobeTrace() {
+    if (!app.currentId || !app.newick || app.isOpeningMicrobeTrace) return
+
+    const bridgeWindow = openMicrobeTraceBridgeWindow()
+    if (!bridgeWindow) {
+      app.microbeTraceError = 'The MicrobeTrace bridge window was blocked. Allow popups for Syrup and try again.'
+      return
+    }
+
+    app.isOpeningMicrobeTrace = true
+    app.microbeTraceError = ''
+    try {
+      const maple = await requestMapleExport()
+      await stageMicrobeTraceExport({
+        fileName: app.fileName,
+        maple,
+        newick: app.newick,
+      }, bridgeWindow)
+    } catch (err) {
+      bridgeWindow.close()
+      app.microbeTraceError = err instanceof Error ? err.message : 'Could not prepare the MicrobeTrace handoff.'
+    } finally {
+      app.isOpeningMicrobeTrace = false
+    }
+  }
+
+  function requestMapleExport() {
+    if (!app.currentId) return Promise.reject(new Error('Load an alignment before exporting MAPLE.'))
+    if (pendingMapleExport) return Promise.reject(new Error('A MAPLE export is already in progress.'))
+
+    return new Promise<string>((resolve, reject) => {
+      pendingMapleExport = { resolve, reject }
+      getWorker().postMessage({
+        type: 'export-maple',
+        id: app.currentId,
+      })
     })
+  }
+
+  function rejectPendingMapleExport(error: Error) {
+    if (!pendingMapleExport) return
+    pendingMapleExport.reject(error)
+    pendingMapleExport = null
   }
 
   function toggleInternalLabels() {
@@ -731,6 +797,10 @@ export function createCmapleApp() {
       }
 
       if (message.type === 'error') {
+        if (pendingMapleExport) {
+          rejectPendingMapleExport(new Error(message.error))
+          return
+        }
         app.error = message.error
         app.isExportingMaple = false
         app.warningSummaryPending = false
@@ -770,9 +840,8 @@ export function createCmapleApp() {
       }
 
       if (message.type === 'maple-export') {
-        const baseName = app.fileName.replace(/\.[^.]+$/, '') || 'alignment'
-        downloadTextFile(message.maple, `${baseName}.maple`)
-        app.isExportingMaple = false
+        pendingMapleExport?.resolve(message.maple)
+        pendingMapleExport = null
         return
       }
 

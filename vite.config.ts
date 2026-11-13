@@ -8,7 +8,8 @@ const { version } = JSON.parse(
 ) as { version: string }
 
 // Cross-origin isolation unlocks threaded WASM. `/trees.html` must stay outside
-// it so the page can keep a tabEE receiving window's handle.
+// it: the tabEE sends need a live receiving-window handle, and the MicrobeTrace
+// handoff is a popup.
 const TREE_LIBRARY_PATH = '/trees.html'
 
 function perPathIsolationHeaders(): Plugin {

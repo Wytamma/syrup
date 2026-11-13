@@ -9,6 +9,14 @@
   import { TabeeException } from "@tabee/protocol";
   import AppTopbar from "./AppTopbar.svelte";
   import { downloadTextFile } from "../download";
+  import {
+    deleteMicrobeTraceHandoff,
+    loadMicrobeTraceSdk,
+    openMicrobeTraceHandoff,
+    readHandoffId,
+    readMicrobeTraceHandoff,
+    type MicrobeTraceOptions,
+  } from "../microbetrace-handoff";
   import { createThemeController } from "../state/theme.svelte";
   import {
     CLOCKOR2_URL,
@@ -34,6 +42,10 @@
   let trees = $state<StoredTree[]>([]);
   let selectedId = $state("");
   let customUrl = $state("");
+  const handoffId = readHandoffId(location.hash);
+  let handoffOptions = $state<MicrobeTraceOptions | null>(null);
+  let handoffBusy = $state(false);
+  let handoffSummary = $state("");
   let status = $state("");
   let statusKind = $state<"info" | "error">("info");
   let pendingTree = $state<StoredTree | undefined>(undefined);
@@ -154,8 +166,50 @@
     }
   }
 
+  async function prepareHandoff() {
+    try {
+      const options = await readMicrobeTraceHandoff(handoffId);
+      await loadMicrobeTraceSdk(options.target);
+      handoffOptions = options;
+      handoffSummary = `Ready to send ${options.files
+        .map((file) => file.name)
+        .join(" and ")}.`;
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : String(error),
+        "error",
+      );
+    }
+  }
+
+  async function confirmHandoff() {
+    if (!handoffOptions) return;
+
+    handoffBusy = true;
+    setStatus("Opening MicrobeTrace…");
+    try {
+      await openMicrobeTraceHandoff(handoffOptions);
+      setStatus("MicrobeTrace accepted the analysis.");
+      handoffOptions = null;
+      await deleteMicrobeTraceHandoff(handoffId);
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : String(error),
+        "error",
+      );
+    } finally {
+      handoffBusy = false;
+    }
+  }
+
   onMount(() => {
     theme.mount();
+
+    if (handoffId) {
+      void prepareHandoff();
+      return;
+    }
+
     channel = new BroadcastChannel(TREES_CHANGED_CHANNEL);
     channel.onmessage = () => void refresh();
     void refresh();
@@ -180,6 +234,34 @@
         <img src="/images/syrup_logo.png" alt="Syrup trees" decoding="async" />
       </a>
     </h1>
+    {#if handoffId}
+      <div class="trees-panel trees-handoff">
+        <h2>Continue to MicrobeTrace</h2>
+        <p>
+          Syrup prepared your tree and MAPLE alignment. Nothing has left this
+          browser.
+        </p>
+        <p class="trees-hint">
+          {handoffSummary || "Reading the staged analysis…"}
+        </p>
+        <button
+          type="button"
+          class="primary-button"
+          disabled={!handoffOptions || handoffBusy}
+          onclick={() => void confirmHandoff()}
+        >
+          Open in MicrobeTrace
+        </button>
+        <p
+          class="trees-status"
+          role="status"
+          aria-live="polite"
+          data-kind={statusKind}
+        >
+          {status}
+        </p>
+      </div>
+    {:else}
     <div class="trees-panel trees-panel--list">
       {#if trees.length === 0}
         <p class="trees-empty">
@@ -358,5 +440,6 @@
         {status}
       </p>
     </div>
+    {/if}
   </section>
 </main>

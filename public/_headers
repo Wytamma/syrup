@@ -4,7 +4,8 @@
   Cross-Origin-Embedder-Policy: require-corp
 
 # The tree library must stay outside isolation: the tabEE send buttons need a
-# live handle on the receiving window. Later rules detach headers added above.
+# live handle on the receiving window, and the MicrobeTrace handoff runs there
+# as a popup. Later rules detach headers added above.
 /trees.html
   ! Cross-Origin-Opener-Policy
   ! Cross-Origin-Embedder-Policy
