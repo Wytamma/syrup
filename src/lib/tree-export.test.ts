@@ -27,6 +27,7 @@ test('formatTreeMeta reports size, tips and log likelihood', () => {
     sourceFileName: 'seed.nwk',
     newick: '((a:1,b:1):1,c:2);',
     nexus: '',
+    maple: '',
     logLikelihood: -12.6,
     sampleCount: 3,
     sequenceLength: 3,

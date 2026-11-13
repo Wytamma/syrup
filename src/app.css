@@ -1372,6 +1372,12 @@ main.trees-page {
   gap: 10px;
 }
 
+.trees-action-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
 .trees-logo {
   height: 22px;
   width: auto;
@@ -1426,20 +1432,6 @@ main.trees-page {
   color: var(--subtle);
   font-size: 0.8rem;
   text-align: center;
-}
-
-.trees-handoff {
-  align-self: start;
-  align-content: start;
-}
-
-.trees-handoff h2 {
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-.trees-handoff button {
-  min-height: 44px;
 }
 
 .trees-empty {

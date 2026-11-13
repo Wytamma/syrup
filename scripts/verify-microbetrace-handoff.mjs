@@ -14,22 +14,15 @@ try {
 
   await page.getByRole('dialog', { name: 'Alignment ready' }).waitFor()
   await page.getByRole('button', { name: 'Run', exact: true }).click()
-  const openButton = page.getByRole('button', { name: 'Open tree and alignment in MicrobeTrace' })
-  await openButton.waitFor({ timeout: 120_000 })
+  await page.waitForSelector('main.tree-mode', { timeout: 120_000 })
 
-  const bridgePromise = context.waitForEvent('page')
-  await openButton.click()
-  const bridge = await bridgePromise
-  await bridge.waitForURL(/\/trees\.html#handoff=/)
-  await bridge.waitForLoadState('domcontentloaded')
-  assert.equal(await bridge.evaluate(() => crossOriginIsolated), false, 'The export bridge must not be cross-origin isolated.')
-  await bridge.getByRole('button', { name: 'Open in MicrobeTrace' }).waitFor()
-  const summary = await bridge.locator('.trees-handoff .trees-hint').textContent()
-  assert.match(summary || '', /B\.1\.429\.maple/)
-  assert.match(summary || '', /B\.1\.429\.nwk/)
+  const library = await context.newPage()
+  await library.goto(new URL('trees.html', syrupUrl).toString())
+  assert.equal(await library.evaluate(() => crossOriginIsolated), false, 'The tree library must not be cross-origin isolated.')
+  await library.waitForSelector('.tree-row', { timeout: 60_000 })
 
   const microbeTracePagePromise = context.waitForEvent('page')
-  await bridge.getByRole('button', { name: 'Open in MicrobeTrace' }).click()
+  await library.getByRole('button', { name: 'Send to MicrobeTrace' }).click()
   const microbeTracePage = await microbeTracePagePromise
   await microbeTracePage.waitForURL(
     (url) => url.href.startsWith(microbeTraceUrl) && url.hash.startsWith('#handoff='),
@@ -37,11 +30,11 @@ try {
   )
   await microbeTracePage.locator('[data-testid="partner-dataset-name"]').waitFor({ timeout: 120_000 })
   assert.match(
-    await microbeTracePage.locator('[data-testid="partner-dataset-name"]').textContent() || '',
+    (await microbeTracePage.locator('[data-testid="partner-dataset-name"]').textContent()) || '',
     /B\.1\.429 — Syrup analysis/,
   )
 
-  console.log('Syrup → MicrobeTrace handoff verified with MAPLE and Newick files.')
+  console.log('Syrup → MicrobeTrace handoff verified from the tree library with the MAPLE alignment and Newick tree.')
 } finally {
   await browser.close()
 }

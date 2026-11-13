@@ -17,6 +17,7 @@ export interface StoredTree {
   sourceFileName: string
   newick: string
   nexus: string
+  maple: string
   logLikelihood: number
   sampleCount: number
   sequenceLength: number

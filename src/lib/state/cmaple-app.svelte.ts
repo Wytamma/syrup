@@ -24,10 +24,6 @@ import type {
   TreeSearchType,
 } from '../../types/cmaple'
 import { downloadTextFile } from '../download'
-import {
-  openMicrobeTraceBridgeWindow,
-  stageMicrobeTraceExport,
-} from '../microbetrace-handoff'
 import { treeBaseName, treeDownloadName } from '../tree-export'
 import { saveTree } from '../tree-store'
 
@@ -114,8 +110,6 @@ export function createCmapleApp() {
     didCopyNewick: false,
     didDownloadNewick: false,
     isExportingMaple: false,
-    isOpeningMicrobeTrace: false,
-    microbeTraceError: '',
     numThreads: Math.max(1, Math.floor((navigator.hardwareConcurrency || 1) / 2)),
     maxThreads: Math.max(1, navigator.hardwareConcurrency || 1),
     substitutionModel: 'GTR' as SubstitutionModel,
@@ -172,7 +166,6 @@ export function createCmapleApp() {
     copyNewick,
     downloadNewick,
     downloadMaple,
-    openInMicrobeTrace,
     toggleInternalLabels,
     toggleLeafLabels,
     toggleMutationLabels,
@@ -459,8 +452,6 @@ export function createCmapleApp() {
     app.didCopyNewick = false
     app.didDownloadNewick = false
     app.isExportingMaple = false
-    app.isOpeningMicrobeTrace = false
-    app.microbeTraceError = ''
     clearFeedbackTimer('copy')
     clearFeedbackTimer('download')
     pendingLogLines = []
@@ -604,32 +595,6 @@ export function createCmapleApp() {
       app.error = err instanceof Error ? err.message : 'Could not export the MAPLE alignment.'
     } finally {
       app.isExportingMaple = false
-    }
-  }
-
-  async function openInMicrobeTrace() {
-    if (!app.currentId || !app.newick || app.isOpeningMicrobeTrace) return
-
-    const bridgeWindow = openMicrobeTraceBridgeWindow()
-    if (!bridgeWindow) {
-      app.microbeTraceError = 'The MicrobeTrace bridge window was blocked. Allow popups for Syrup and try again.'
-      return
-    }
-
-    app.isOpeningMicrobeTrace = true
-    app.microbeTraceError = ''
-    try {
-      const maple = await requestMapleExport()
-      await stageMicrobeTraceExport({
-        fileName: app.fileName,
-        maple,
-        newick: app.newick,
-      }, bridgeWindow)
-    } catch (err) {
-      bridgeWindow.close()
-      app.microbeTraceError = err instanceof Error ? err.message : 'Could not prepare the MicrobeTrace handoff.'
-    } finally {
-      app.isOpeningMicrobeTrace = false
     }
   }
 
@@ -855,16 +820,20 @@ export function createCmapleApp() {
       app.effectiveStatus = message.effective
       app.warnings = message.warnings
       stopTimer()
-      void saveTree({
-        name: treeBaseName(app.fileName),
-        sourceFileName: app.fileName,
-        newick: message.newick,
-        nexus: message.nexus ?? '',
-        logLikelihood: message.logLikelihood,
-        sampleCount: app.stats?.sequenceCount ?? 0,
-        sequenceLength: app.stats?.sequenceLength ?? 0,
-        sequenceType: app.stats?.sequenceType ?? 'dna',
-      })
+      void (async () => {
+        const maple = await requestMapleExport().catch(() => '')
+        await saveTree({
+          name: treeBaseName(app.fileName),
+          sourceFileName: app.fileName,
+          newick: message.newick,
+          nexus: message.nexus ?? '',
+          maple,
+          logLikelihood: message.logLikelihood,
+          sampleCount: app.stats?.sequenceCount ?? 0,
+          sequenceLength: app.stats?.sequenceLength ?? 0,
+          sequenceType: app.stats?.sequenceType ?? 'dna',
+        })
+      })()
       app.state = 'done'
     }
 

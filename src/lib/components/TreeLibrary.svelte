@@ -9,14 +9,7 @@
   import { TabeeException } from "@tabee/protocol";
   import AppTopbar from "./AppTopbar.svelte";
   import { downloadTextFile } from "../download";
-  import {
-    deleteMicrobeTraceHandoff,
-    loadMicrobeTraceSdk,
-    openMicrobeTraceHandoff,
-    readHandoffId,
-    readMicrobeTraceHandoff,
-    type MicrobeTraceOptions,
-  } from "../microbetrace-handoff";
+  import { sendToMicrobeTrace } from "../microbetrace-handoff";
   import { createThemeController } from "../state/theme.svelte";
   import {
     CLOCKOR2_URL,
@@ -42,10 +35,6 @@
   let trees = $state<StoredTree[]>([]);
   let selectedId = $state("");
   let customUrl = $state("");
-  const handoffId = readHandoffId(location.hash);
-  let handoffOptions = $state<MicrobeTraceOptions | null>(null);
-  let handoffBusy = $state(false);
-  let handoffSummary = $state("");
   let status = $state("");
   let statusKind = $state<"info" | "error">("info");
   let pendingTree = $state<StoredTree | undefined>(undefined);
@@ -166,50 +155,42 @@
     }
   }
 
-  async function prepareHandoff() {
-    try {
-      const options = await readMicrobeTraceHandoff(handoffId);
-      await loadMicrobeTraceSdk(options.target);
-      handoffOptions = options;
-      handoffSummary = `Ready to send ${options.files
-        .map((file) => file.name)
-        .join(" and ")}.`;
-    } catch (error) {
-      setStatus(
-        error instanceof Error ? error.message : String(error),
-        "error",
-      );
-    }
+  function submitMicrobeTrace() {
+    if (!selectedTree) return;
+    void sendTreeToMicrobeTrace(selectedTree);
   }
 
-  async function confirmHandoff() {
-    if (!handoffOptions) return;
+  async function sendTreeToMicrobeTrace(tree: StoredTree) {
+    if (!tree.maple) {
+      setStatus(
+        "This tree was saved without its MAPLE alignment. Re-run the inference to send it to MicrobeTrace.",
+        "error",
+      );
+      return;
+    }
 
-    handoffBusy = true;
+    pendingTree = tree;
     setStatus("Opening MicrobeTrace…");
+
     try {
-      await openMicrobeTraceHandoff(handoffOptions);
-      setStatus("MicrobeTrace accepted the analysis.");
-      handoffOptions = null;
-      await deleteMicrobeTraceHandoff(handoffId);
+      await sendToMicrobeTrace({
+        name: tree.name,
+        newick: tree.newick,
+        maple: tree.maple,
+      });
+      setStatus(`MicrobeTrace accepted ${tree.name}.`);
     } catch (error) {
       setStatus(
         error instanceof Error ? error.message : String(error),
         "error",
       );
     } finally {
-      handoffBusy = false;
+      pendingTree = undefined;
     }
   }
 
   onMount(() => {
     theme.mount();
-
-    if (handoffId) {
-      void prepareHandoff();
-      return;
-    }
-
     channel = new BroadcastChannel(TREES_CHANGED_CHANNEL);
     channel.onmessage = () => void refresh();
     void refresh();
@@ -234,34 +215,6 @@
         <img src="/images/syrup_logo.png" alt="Syrup trees" decoding="async" />
       </a>
     </h1>
-    {#if handoffId}
-      <div class="trees-panel trees-handoff">
-        <h2>Continue to MicrobeTrace</h2>
-        <p>
-          Syrup prepared your tree and MAPLE alignment. Nothing has left this
-          browser.
-        </p>
-        <p class="trees-hint">
-          {handoffSummary || "Reading the staged analysis…"}
-        </p>
-        <button
-          type="button"
-          class="primary-button"
-          disabled={!handoffOptions || handoffBusy}
-          onclick={() => void confirmHandoff()}
-        >
-          Open in MicrobeTrace
-        </button>
-        <p
-          class="trees-status"
-          role="status"
-          aria-live="polite"
-          data-kind={statusKind}
-        >
-          {status}
-        </p>
-      </div>
-    {:else}
     <div class="trees-panel trees-panel--list">
       {#if trees.length === 0}
         <p class="trees-empty">
@@ -399,6 +352,29 @@
           />
           Send to Trakka
         </button>
+        <button
+          type="button"
+          class="button-like trees-button"
+          disabled={!selectedTree || pendingTree !== undefined}
+          onclick={submitMicrobeTrace}
+        >
+          <svg
+            class="trees-action-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="6" cy="12" r="2.25" />
+            <circle cx="17.5" cy="6" r="2.25" />
+            <circle cx="17.5" cy="18" r="2.25" />
+            <path d="m8 11 7.4-3.8M8 13l7.4 3.8" />
+          </svg>
+          Send to MicrobeTrace
+        </button>
       </div>
 
       <form
@@ -440,6 +416,5 @@
         {status}
       </p>
     </div>
-    {/if}
   </section>
 </main>
