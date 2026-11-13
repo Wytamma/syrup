@@ -22,7 +22,7 @@ try {
   await library.waitForSelector('.tree-row', { timeout: 60_000 })
 
   const microbeTracePagePromise = context.waitForEvent('page')
-  await library.getByRole('button', { name: 'Send to MicrobeTrace' }).click()
+  await library.getByRole('button', { name: 'Open in MicrobeTrace' }).click()
   const microbeTracePage = await microbeTracePagePromise
   await microbeTracePage.waitForURL(
     (url) => url.href.startsWith(microbeTraceUrl) && url.hash.startsWith('#handoff='),

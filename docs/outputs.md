@@ -29,8 +29,8 @@ The interactive viewer displays inferred mutations on both internal and terminal
 
 The **Download MAPLE format** link exports the loaded alignment in MAPLE format. This is available after preflight completes and before inference starts.
 
-## Send to MicrobeTrace
+## Open in MicrobeTrace
 
-Every completed inference is saved with its MAPLE alignment. In the tree library, select a tree and choose **Send to MicrobeTrace** to hand the Newick tree and the MAPLE alignment to MicrobeTrace through its partner embed SDK. The files go straight from the browser to MicrobeTrace; nothing is uploaded anywhere else.
+Every completed inference is saved with its MAPLE alignment. In the tree library, select a tree and choose **Open in MicrobeTrace** to hand the Newick tree and the MAPLE alignment to MicrobeTrace through its partner embed SDK. The files go straight from the browser to MicrobeTrace; nothing is uploaded anywhere else.
 
 The tree library page is served without cross-origin isolation, which is what lets it load the MicrobeTrace SDK and open the partner handoff.
