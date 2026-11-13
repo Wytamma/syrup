@@ -174,14 +174,19 @@
       return;
     }
 
-    const trigger = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const trigger = (
+      event.currentTarget as HTMLElement
+    ).getBoundingClientRect();
     const below = trigger.bottom + 6;
     const top =
       below + MENU_ESTIMATED_HEIGHT > window.innerHeight
         ? Math.max(8, trigger.top - MENU_ESTIMATED_HEIGHT)
         : below;
 
-    menuPosition = { top, right: Math.round(window.innerWidth - trigger.right) };
+    menuPosition = {
+      top,
+      right: Math.round(window.innerWidth - trigger.right),
+    };
     openMenuId = treeId;
   }
 
@@ -476,7 +481,11 @@
                   title="Actions"
                   onclick={(event) => toggleMenu(event, tree.id)}
                 >
-                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="currentColor"
+                  >
                     <circle cx="5" cy="12" r="1.9" />
                     <circle cx="12" cy="12" r="1.9" />
                     <circle cx="19" cy="12" r="1.9" />
@@ -579,6 +588,7 @@
           {/each}
         </div>
       {/if}
+      <p class="trees-hint">Saved trees are stored only in this browser</p>
     </div>
 
     <div class="trees-panel trees-panel--actions">
