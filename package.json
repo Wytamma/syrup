@@ -13,7 +13,7 @@
     "build:lib": "npm run build --workspace @wytamma/maple-wasm",
     "build:wasm": "pixi run build-wasm",
     "check": "npm run build:lib && svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
-    "test": "node --experimental-strip-types --test src/lib/phylocanvas/*.test.ts",
+    "test": "node --experimental-strip-types --test src/lib/phylocanvas/*.test.ts src/lib/*.test.ts",
     "test:lib": "npm run test --workspace @wytamma/maple-wasm",
     "smoke:lib": "npm run smoke --workspace @wytamma/maple-wasm"
   },
@@ -30,6 +30,9 @@
   },
   "dependencies": {
     "@phylocanvas/phylocanvas.gl": "^1.62.0",
+    "@tabee/browser": "^0.1.0",
+    "@tabee/formats": "^0.1.0",
+    "@tabee/protocol": "^0.1.0",
     "@wytamma/maple-wasm": "^0.1.0",
     "deck.gl": "8.3.10",
     "three": "^0.184.0"

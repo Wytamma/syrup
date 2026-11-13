@@ -88,3 +88,5 @@ Threaded WASM requires cross-origin isolation headers:
 - `Cross-Origin-Embedder-Policy: require-corp`
 
 Local development and `vite preview` provide these headers. If you deploy to another host, that host must also send them for threaded execution to work.
+
+The tree library at `/trees.html` is the exception: it must be served **without** `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy`, otherwise the page cannot hold a tabEE receiving window and both send buttons stay disabled (copy, download, and Clockor2 navigation still work). `public/_headers` encodes this for Cloudflare Pages and Workers static assets: isolation on `/*`, detached for `/trees.html`. Hosts that cannot send per-path headers (GitHub Pages, for example) cannot run the threaded build.

@@ -23,6 +23,9 @@ import type {
   SubstitutionModel,
   TreeSearchType,
 } from '../../types/cmaple'
+import { downloadTextFile } from '../download'
+import { treeBaseName, treeDownloadName } from '../tree-export'
+import { saveTree } from '../tree-store'
 
 export type AppState = 'idle' | 'preflight' | 'ready' | 'running' | 'done' | 'error'
 
@@ -568,15 +571,8 @@ export function createCmapleApp() {
 
   function downloadNewick() {
     if (!app.newick) return
-    const content = app.nexus || app.newick
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    const baseName = app.fileName.replace(/\.[^.]+$/, '') || 'cmaple-tree'
-    link.href = url
-    link.download = app.nexus ? `${baseName}.mat.nex` : `${baseName}.nwk`
-    link.click()
-    URL.revokeObjectURL(url)
+    const hasNexus = app.nexus !== ''
+    downloadTextFile(hasNexus ? app.nexus : app.newick, treeDownloadName(app.fileName, hasNexus))
     showActionFeedback('download')
   }
 
@@ -774,14 +770,8 @@ export function createCmapleApp() {
       }
 
       if (message.type === 'maple-export') {
-        const blob = new Blob([message.maple], { type: 'text/plain;charset=utf-8' })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
         const baseName = app.fileName.replace(/\.[^.]+$/, '') || 'alignment'
-        link.href = url
-        link.download = `${baseName}.maple`
-        link.click()
-        URL.revokeObjectURL(url)
+        downloadTextFile(message.maple, `${baseName}.maple`)
         app.isExportingMaple = false
         return
       }
@@ -796,6 +786,16 @@ export function createCmapleApp() {
       app.effectiveStatus = message.effective
       app.warnings = message.warnings
       stopTimer()
+      void saveTree({
+        name: treeBaseName(app.fileName),
+        sourceFileName: app.fileName,
+        newick: message.newick,
+        nexus: message.nexus ?? '',
+        logLikelihood: message.logLikelihood,
+        sampleCount: app.stats?.sequenceCount ?? 0,
+        sequenceLength: app.stats?.sequenceLength ?? 0,
+        sequenceType: app.stats?.sequenceType ?? 'dna',
+      })
       app.state = 'done'
     }
 
