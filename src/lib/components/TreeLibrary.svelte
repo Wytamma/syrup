@@ -320,7 +320,7 @@
   <section class="trees-shell">
     <h1 class="trees-brand">
       <a href="/">
-        <img src="/images/syrup_logo.png" alt="Syrup trees" decoding="async" />
+        <img src="/logo.png" alt="Syrup trees" decoding="async" />
       </a>
     </h1>
     <div class="trees-panel trees-panel--list">
