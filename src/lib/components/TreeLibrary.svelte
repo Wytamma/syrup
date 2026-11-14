@@ -623,7 +623,8 @@
         <button
           type="button"
           class="button-like trees-button"
-          disabled={!selectedTree || isolated || pendingTree !== undefined}
+          disabled
+          //={!selectedTree || isolated || pendingTree !== undefined}
           onclick={submitMicrobeTrace}
         >
           <img class="trees-logo" src="/images/microbetrace_logo.png" alt="" />
